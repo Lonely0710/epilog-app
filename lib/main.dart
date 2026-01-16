@@ -6,21 +6,12 @@ import 'app/app.dart';
 import 'app/presentation/splash_screen.dart';
 import 'dart:io';
 import 'package:flutter/services.dart';
-import 'core/services/secure_storage_service.dart';
-
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 void main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
 
   // Preserve the splash screen until we're ready to show our custom splash
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
-
-  try {
-    await dotenv.load(fileName: ".env");
-  } catch (e) {
-    debugPrint('Warning: .env file not found or could not be loaded: $e');
-  }
 
   // Fix for CERTIFICATE_VERIFY_FAILED: application verification failure
   HttpOverrides.global = MyHttpOverrides();
@@ -39,52 +30,17 @@ void main() async {
     ),
   );
 
-  await _seedApiKeys();
-
   // Remove native splash and show our app with custom splash
   FlutterNativeSplash.remove();
 
   runApp(const ProviderScope(child: DramaTrackerAppWithSplash()));
 }
 
-Future<void> _seedApiKeys() async {
-  // Check both .env and --dart-define environment variables
-  // Priority: --dart-define > .env
-
-  String? apiKey = const String.fromEnvironment('TMDB_API_KEY');
-  if (apiKey.isEmpty) {
-    apiKey = dotenv.env['TMDB_API_KEY'];
-  }
-
-  String? apiToken = const String.fromEnvironment('TMDB_ACCESS_TOKEN');
-  if (apiToken.isEmpty) {
-    apiToken = dotenv.env['TMDB_ACCESS_TOKEN'];
-  }
-
-  // Always try to seed if we found keys, regardless of previous state
-  // This ensures updates to keys are propagated
-  if (apiKey != null && apiKey.isNotEmpty) {
-    await SecureStorageService.setTmdbApiKey(apiKey);
-    debugPrint('SecureStorage: TMDb API Key seeded.');
-  }
-
-  if (apiToken != null && apiToken.isNotEmpty) {
-    await SecureStorageService.setTmdbApiToken(apiToken);
-    debugPrint('SecureStorage: TMDb API Token seeded.');
-  }
-
-  // Log usage for debugging (don't log the full key in production usually, but helpful here)
-  if (apiKey == null || apiKey.isEmpty) {
-    debugPrint('Warning: TMDb API Key not found in .env or --dart-define');
-  }
-}
-
 class MyHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
     return super.createHttpClient(context)
-      ..badCertificateCallback =
-          (X509Certificate cert, String host, int port) => true;
+      ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
   }
 }
 
@@ -93,8 +49,7 @@ class DramaTrackerAppWithSplash extends StatefulWidget {
   const DramaTrackerAppWithSplash({super.key});
 
   @override
-  State<DramaTrackerAppWithSplash> createState() =>
-      _DramaTrackerAppWithSplashState();
+  State<DramaTrackerAppWithSplash> createState() => _DramaTrackerAppWithSplashState();
 }
 
 class _DramaTrackerAppWithSplashState extends State<DramaTrackerAppWithSplash> {

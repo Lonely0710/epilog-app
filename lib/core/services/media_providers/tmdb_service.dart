@@ -1,112 +1,37 @@
-import 'dart:convert';
 import 'dart:developer';
-import 'package:http/http.dart' as http;
-import '../../services/secure_storage_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../domain/entities/media.dart';
 import '../../data/models/tmdb_model.dart';
 
 class TmdbService {
-  static const String _baseUrl = 'https://api.themoviedb.org/3';
-
   Future<List<Media>> searchMovie(String query) async {
-    final apiKey = await SecureStorageService.tmdbApiKey;
-
-    if (apiKey == null ||
-        apiKey == 'YOUR_TMDB_API_KEY_HERE' ||
-        apiKey.isEmpty) {
-      log('TMDb API Key not set');
-      return [];
-    }
-
-    final url =
-        '$_baseUrl/search/multi?api_key=$apiKey&language=zh-CN&query=$query&include_adult=false';
-    log('Searching TMDb: $url');
-
-    try {
-      final response = await http.get(Uri.parse(url));
-
-      if (response.statusCode != 200) {
-        log('TMDb API Error: ${response.statusCode}');
-        return [];
-      }
-
-      final data = json.decode(response.body);
-      final results = data['results'] as List;
-
-      // Filter
-      final basicResults = results
-          .where((item) =>
-              item['media_type'] == 'movie' || item['media_type'] == 'tv')
-          .toList();
-
-      final detailedResults = await Future.wait(
-        basicResults.take(8).map((item) => _fetchDetails(item, apiKey)),
-      );
-
-      return detailedResults.whereType<Media>().toList();
-    } catch (e) {
-      log('Error searching TMDb: $e');
-      return [];
-    }
-  }
-
-  Future<Media?> _fetchDetails(Map<String, dynamic> item, String apiKey) async {
-    try {
-      final mediaType = item['media_type'];
-      final id = item['id'].toString();
-      final detailUrl =
-          '$_baseUrl/$mediaType/$id?api_key=$apiKey&language=zh-CN&append_to_response=credits';
-
-      final response = await http.get(Uri.parse(detailUrl));
-      if (response.statusCode == 200) {
-        final detailData = json.decode(response.body);
-        final model = TmdbModel.fromJson(detailData, mediaType);
-        return model.toEntity();
-      }
-    } catch (e) {
-      log('Error fetching details for ${item['id']}: $e');
-    }
-    // Fallback
-    try {
-      final model = TmdbModel.fromJson(item, item['media_type']);
-      return model.toEntity();
-    } catch (e) {
-      return null;
-    }
+    return _invokeProxyList(
+      path: '/search/multi',
+      query: {
+        'query': query,
+        'language': 'zh-CN',
+        'include_adult': 'false',
+      },
+      filter: (item) => item['media_type'] == 'movie' || item['media_type'] == 'tv',
+      limit: 8,
+      fetchDetails: true,
+    );
   }
 
   Future<List<Media>> getTopRatedMovies({int page = 1}) async {
-    return _getTopRated('movie', page);
+    return _invokeProxyList(
+      path: '/movie/top_rated',
+      query: {'language': 'zh-CN', 'page': page.toString()},
+      typeForAll: 'movie',
+    );
   }
 
   Future<List<Media>> getTopRatedTVShows({int page = 1}) async {
-    return _getTopRated('tv', page);
-  }
-
-  Future<List<Media>> _getTopRated(String type, int page) async {
-    final apiKey = await SecureStorageService.tmdbApiKey;
-    if (apiKey == null || apiKey.isEmpty) return [];
-
-    final url =
-        '$_baseUrl/$type/top_rated?api_key=$apiKey&language=zh-CN&page=$page';
-    log('Fetching Top Rated $type (Page $page): $url');
-
-    try {
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final results = data['results'] as List;
-        return results.map((item) {
-          // For Top Rated list, we don't fetch details to save quota/time, matching Android logic
-          // Pass type explicitly as it might not be in the result item for some endpoints,
-          // though usually 'media_type' is missing in specific list endpoints, so we pass it.
-          return TmdbModel.fromJson(item, type).toEntity();
-        }).toList();
-      }
-    } catch (e) {
-      log('Error fetching top rated $type: $e');
-    }
-    return [];
+    return _invokeProxyList(
+      path: '/tv/top_rated',
+      query: {'language': 'zh-CN', 'page': page.toString()},
+      typeForAll: 'tv',
+    );
   }
 
   Future<List<Media>> discoverMovies({
@@ -131,48 +56,131 @@ class TmdbService {
     int? year,
     String? genre,
   ) async {
-    final apiKey = await SecureStorageService.tmdbApiKey;
-    if (apiKey == null || apiKey.isEmpty) return [];
+    final queryParams = {
+      'language': 'zh-CN',
+      'sort_by': 'vote_average.desc',
+      'vote_count.gte': '300',
+      'page': page.toString(),
+    };
 
-    // Base URL
-    String url =
-        '$_baseUrl/discover/$type?api_key=$apiKey&language=zh-CN&sort_by=vote_average.desc&vote_count.gte=300&page=$page';
-
-    // Add filters
     if (year != null) {
       if (type == 'movie') {
-        url += '&primary_release_year=$year';
+        queryParams['primary_release_year'] = year.toString();
       } else {
-        url += '&first_air_date_year=$year';
+        queryParams['first_air_date_year'] = year.toString();
       }
     }
 
     if (genre != null) {
       final genreId = _getGenreId(type, genre);
       if (genreId != null) {
-        url += '&with_genres=$genreId';
+        queryParams['with_genres'] = genreId.toString();
       }
     }
 
-    log('Discovering $type (Page $page, Year: $year, Genre: $genre): $url');
+    return _invokeProxyList(
+      path: '/discover/$type',
+      query: queryParams,
+      typeForAll: type,
+    );
+  }
 
+  /// Core method to call Supabase Edge Function
+  Future<List<Media>> _invokeProxyList({
+    required String path,
+    Map<String, String>? query,
+    bool Function(dynamic)? filter,
+    String? typeForAll,
+    int? limit,
+    bool fetchDetails = false,
+  }) async {
     try {
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final results = data['results'] as List;
-        return results.map((item) {
-          return TmdbModel.fromJson(item, type).toEntity();
+      final response = await Supabase.instance.client.functions.invoke(
+        'tmdb-proxy',
+        body: {
+          'path': path,
+          'query': query,
+        },
+      );
+
+      // Edge Function returns { data: ... } or direct array depending on implementation
+      // Our function returns standard TMDb JSON structure directly
+      final data = response.data;
+
+      if (data['results'] == null) {
+        log('TMDb Proxy Error: No results found in response');
+        return [];
+      }
+
+      final results = data['results'] as List;
+
+      // 1. Filter
+      var filtered = results;
+      if (filter != null) {
+        filtered = results.where(filter).toList();
+      }
+
+      // 2. Limit
+      if (limit != null) {
+        filtered = filtered.take(limit).toList();
+      }
+
+      // 3. Map to Entity (with optional details fetch)
+      if (fetchDetails) {
+        // Detailed fetch also goes through proxy individually
+        // Note: For performance, ideally specific detail endpoint should be used
+        // But for consistency with V3 implementation, we iterate.
+        // Optimization: We could add a 'batch' endpoint to proxy later.
+        final detailedResults = await Future.wait(
+          filtered.map((item) => _fetchDetailViaProxy(item)),
+        );
+        return detailedResults.whereType<Media>().toList();
+      } else {
+        return filtered.map((item) {
+          final type = typeForAll ?? item['media_type'];
+          // Ensure we have a type, fallback to movie if unknown
+          return TmdbModel.fromJson(item, type ?? 'movie').toEntity();
         }).toList();
       }
     } catch (e) {
-      log('Error discovering $type: $e');
+      log('Error invoking tmdb-proxy for $path: $e');
+      return [];
     }
-    return [];
+  }
+
+  Future<Media?> _fetchDetailViaProxy(Map<String, dynamic> item) async {
+    try {
+      final mediaType = item['media_type'];
+      final id = item['id'].toString();
+
+      final response = await Supabase.instance.client.functions.invoke(
+        'tmdb-proxy',
+        body: {
+          'path': '/$mediaType/$id',
+          'query': {
+            'language': 'zh-CN',
+            'append_to_response': 'credits',
+          }
+        },
+      );
+
+      final detailData = response.data;
+      final model = TmdbModel.fromJson(detailData, mediaType);
+      return model.toEntity();
+    } catch (e) {
+      log('Error fetching details via proxy for ${item['id']}: $e');
+      // Fallback to basic info if detail fetch fails
+      try {
+        final model = TmdbModel.fromJson(item, item['media_type']);
+        return model.toEntity();
+      } catch (e) {
+        return null;
+      }
+    }
   }
 
   int? _getGenreId(String type, String genreName) {
-    // Common genres
+    // ... genre mapping logic remains unchanged ...
     final common = {
       '剧情': 18,
       '喜剧': 35,
@@ -192,14 +200,7 @@ class TmdbService {
       '战争': 10752,
       '音乐': 10402,
       '西部': 37,
-      // '电视电影': 10770, // Removed by user request
     };
-
-    // TV Specific overrides or additions if needed
-    // TMDb TV genres have some differences:
-    // Action & Adventure: 10759
-    // Sci-Fi & Fantasy: 10765
-    // War & Politics: 10768
 
     if (type == 'tv') {
       if (genreName == '动作' || genreName == '冒险') return 10759;
