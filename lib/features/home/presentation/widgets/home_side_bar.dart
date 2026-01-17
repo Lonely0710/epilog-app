@@ -27,9 +27,9 @@ class HomeSideBar extends StatelessWidget {
         children: [
           _buildIcon(0, Icons.live_tv),
           const SizedBox(height: 20),
-          _buildIcon(1, Icons.movie_filter),
+          _buildIcon(1, null, assetPath: 'assets/icons/ic_maoyan.png'),
           const SizedBox(height: 20),
-          _buildIcon(2, null, isCustomAsset: true),
+          _buildIcon(2, null, assetPath: 'assets/icons/ic_bilibili.png'),
           const SizedBox(height: 20),
           _buildIcon(3, Icons.collections_bookmark),
         ],
@@ -37,7 +37,7 @@ class HomeSideBar extends StatelessWidget {
     );
   }
 
-  Widget _buildIcon(int index, IconData? icon, {bool isCustomAsset = false}) {
+  Widget _buildIcon(int index, IconData? icon, {String? assetPath}) {
     final isSelected = selectedIndex == index;
     return GestureDetector(
       onTap: () => onItemSelected(index),
@@ -59,9 +59,9 @@ class HomeSideBar extends StatelessWidget {
               : [],
         ),
         child: Center(
-          child: isCustomAsset
+          child: assetPath != null
               ? Image.asset(
-                  'assets/icons/ic_bilibili.png',
+                  assetPath,
                   width: 26,
                   height: 26,
                   // Use white for selected, grey for unselected

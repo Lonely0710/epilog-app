@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "lib": ["deno.ns", "deno.unstable"],
+    "strict": false,
+    "noImplicitAny": false
+  },
+  "imports": {
+    "std/": "https://deno.land/std@0.168.0/"
+  }
+}

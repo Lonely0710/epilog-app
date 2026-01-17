@@ -47,6 +47,8 @@ class AppSnackBar {
     Duration duration = const Duration(seconds: 3),
     VoidCallback? onAction,
     String? actionLabel,
+    Widget? customIcon,
+    Color? customColor,
   }) {
     final finalMessage = _getFriendlyMessage(error, message);
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -74,6 +76,11 @@ class AppSnackBar {
         break;
     }
 
+    // Override if custom color provided
+    if (customColor != null) {
+      baseColor = customColor;
+    }
+
     final surfaceColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
     final bgColor = Color.alphaBlend(baseColor.withValues(alpha: isDark ? 0.15 : 0.05), surfaceColor);
     final borderColor = baseColor.withValues(alpha: 0.5);
@@ -98,7 +105,7 @@ class AppSnackBar {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
             children: [
-              Icon(iconData, color: baseColor, size: 24),
+              customIcon ?? Icon(iconData, color: baseColor, size: 24),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(

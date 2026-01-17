@@ -1,9 +1,11 @@
 import 'dart:developer';
 import 'dart:async';
+import 'dart:math' hide log;
 import 'package:flutter/material.dart';
 import '../../../../core/domain/entities/media.dart';
 import '../../domain/repositories/search_repository.dart';
 import '../widgets/search_result_item.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:drama_tracker_flutter/features/search/data/datasources/search_history_service.dart';
 import '../../domain/entities/search_history_item.dart';
 import '../../../../app/theme/app_theme.dart';
@@ -17,7 +19,7 @@ class SearchPage extends StatefulWidget {
     super.key,
     this.initialQuery = '',
     this.autoSearch = false,
-    this.searchType = 'anime',
+    this.searchType = 'all',
   });
 
   @override
@@ -36,12 +38,18 @@ class _SearchPageState extends State<SearchPage> {
   String _lastSearchedQuery = '';
   List<SearchHistoryItem> _history = [];
   Timer? _debounce;
+  bool _isFocused = false;
 
   @override
   void initState() {
     super.initState();
     _loadHistory();
     _searchController.text = widget.initialQuery;
+    _searchFocusNode.addListener(() {
+      setState(() {
+        _isFocused = _searchFocusNode.hasFocus;
+      });
+    });
     if (widget.autoSearch && widget.initialQuery.isNotEmpty) {
       _performSearch(widget.initialQuery);
     }
@@ -105,6 +113,9 @@ class _SearchPageState extends State<SearchPage> {
       } else if (widget.searchType == 'anime') {
         // Search Anime (Bangumi)
         searchFutures.add(_searchRepository.searchAnime(query));
+      } else {
+        // For 'all' or any other type, search all sources
+        searchFutures.add(_searchRepository.searchAll(query));
       }
 
       final results = await Future.wait(searchFutures);
@@ -142,8 +153,17 @@ class _SearchPageState extends State<SearchPage> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final scaffoldBg = Theme.of(context).scaffoldBackgroundColor;
-    final textColor = Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black;
-    final hintColor = Theme.of(context).hintColor;
+    final textColor = isDark ? Colors.white : AppTheme.textPrimary;
+    final hintColor = isDark ? Colors.grey.shade500 : Colors.grey;
+
+    // AuthTextField-style: Dynamic styling based on focus
+    final fillColor = _isFocused
+        ? AppTheme.primary.withAlpha(30) // ~12% opacity, lighter theme color
+        : (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.grey.shade100);
+
+    final iconColor = _isFocused
+        ? AppTheme.primary
+        : (_searchController.text.isNotEmpty ? (isDark ? Colors.white70 : Colors.black87) : Colors.grey);
 
     return Scaffold(
       backgroundColor: scaffoldBg,
@@ -159,63 +179,80 @@ class _SearchPageState extends State<SearchPage> {
       ),
       body: Column(
         children: [
-          // Search Bar Area
+          // Search Bar Area - Matching AuthTextField style exactly
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            child: Container(
-              decoration: BoxDecoration(
-                color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey[200],
-                borderRadius: BorderRadius.circular(24),
-                border: isDark
-                    ? Border.all(
-                        color: AppTheme.primary.withValues(alpha: 0.5),
-                        width: 1.5,
-                      )
+            child: TextField(
+              controller: _searchController,
+              focusNode: _searchFocusNode,
+              textInputAction: TextInputAction.search,
+              autofocus: true,
+              cursorColor: AppTheme.primary,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+                color: textColor,
+              ),
+              onSubmitted: (value) {
+                _onSearchSubmitted(value);
+              },
+              decoration: InputDecoration(
+                hintText: '请输入剧目名称',
+                hintStyle: TextStyle(
+                  color: hintColor,
+                  fontSize: 14,
+                  fontWeight: FontWeight.normal,
+                ),
+                filled: true,
+                fillColor: fillColor,
+                // No border when not focused, theme color border when focused
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(
+                    color: AppTheme.primary,
+                    width: 1.5,
+                  ),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 16,
+                  horizontal: 16,
+                ),
+                prefixIcon: Icon(
+                  Icons.search,
+                  color: iconColor,
+                  size: 22,
+                ),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? (_searchController.text != _lastSearchedQuery
+                        ? IconButton(
+                            icon: Icon(Icons.check_circle, size: 20, color: AppTheme.primary),
+                            onPressed: () {
+                              _onSearchSubmitted(_searchController.text);
+                            },
+                          )
+                        : IconButton(
+                            icon: Icon(Icons.delete, size: 20, color: iconColor),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() {
+                                _results = [];
+                                _errorMessage = '';
+                                _lastSearchedQuery = '';
+                              });
+                              // Cancel any pending debounce
+                              _debounce?.cancel();
+                            },
+                          ))
                     : null,
               ),
-              child: TextField(
-                controller: _searchController,
-                focusNode: _searchFocusNode,
-                textInputAction: TextInputAction.search,
-                autofocus: true,
-                style: TextStyle(color: textColor),
-                onSubmitted: (value) {
-                  _onSearchSubmitted(value);
-                },
-                decoration: InputDecoration(
-                  hintText: widget.searchType == 'movie' ? '搜索电影/电视剧' : '搜索动漫',
-                  hintStyle: TextStyle(color: hintColor),
-                  prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey[400] : Colors.grey),
-                  suffixIcon: _searchController.text.isNotEmpty
-                      ? (_searchController.text != _lastSearchedQuery
-                          ? IconButton(
-                              icon: Icon(Icons.check_circle, size: 20, color: AppTheme.primary),
-                              onPressed: () {
-                                _onSearchSubmitted(_searchController.text);
-                              },
-                            )
-                          : IconButton(
-                              icon: Icon(Icons.delete, size: 20, color: isDark ? Colors.grey[400] : Colors.grey),
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() {
-                                  _results = [];
-                                  _errorMessage = '';
-                                  _lastSearchedQuery = '';
-                                });
-                                // Cancel any pending debounce
-                                _debounce?.cancel();
-                              },
-                            ))
-                      : null,
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-                onChanged: (text) {
-                  setState(() {}); // trigger rebuild to show/hide clear button
-                  _onSearchChanged(text);
-                },
-              ),
+              onChanged: (text) {
+                setState(() {}); // trigger rebuild to show/hide clear button
+                _onSearchChanged(text);
+              },
             ),
           ),
 
@@ -229,7 +266,7 @@ class _SearchPageState extends State<SearchPage> {
                             _searchController.text.isEmpty) // Show history when no results and input empty
                         ? _buildHistorySection(context)
                         : _results.isEmpty
-                            ? Center(child: Text('没有找到相关结果', style: TextStyle(color: textColor)))
+                            ? _buildEmptyState(context)
                             : ListView.builder(
                                 itemCount: _results.length,
                                 itemBuilder: (context, index) {
@@ -311,6 +348,58 @@ class _SearchPageState extends State<SearchPage> {
             }).toList(),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Builds the empty state widget with a random SVG illustration
+  Widget _buildEmptyState(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : AppTheme.textPrimary;
+
+    // Randomly select one of the empty state images
+    final emptyImages = [
+      'assets/images/empty_loading.svg',
+      'assets/images/search_empty.svg',
+    ];
+    final randomImage = emptyImages[Random().nextInt(emptyImages.length)];
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SvgPicture.asset(
+              randomImage,
+              width: 200,
+              height: 200,
+              colorFilter: isDark
+                  ? ColorFilter.mode(
+                      Colors.white.withValues(alpha: 0.7),
+                      BlendMode.srcIn,
+                    )
+                  : null,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              '没有找到相关结果',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: textColor,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '试试其他关键词吧',
+              style: TextStyle(
+                fontSize: 14,
+                color: textColor.withValues(alpha: 0.6),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

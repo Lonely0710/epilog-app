@@ -92,7 +92,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/search',
         pageBuilder: (context, state) {
-          final type = state.uri.queryParameters['type'] ?? 'anime';
+          final type = state.uri.queryParameters['type'] ?? 'all';
           return SharedAxisTransitionPage(
             key: state.pageKey,
             child: SearchPage(searchType: type),

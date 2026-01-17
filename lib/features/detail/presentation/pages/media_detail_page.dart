@@ -73,6 +73,115 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
     );
   }
 
+  void _showCategorySheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(bottom: 16),
+              child: Text(
+                '加入资料库',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            _buildOption(
+              context,
+              icon: Icons.movie_creation_outlined,
+              label: 'Movie Library',
+              onTap: () => _addToCollectionWithCategory('movie', 'Movie Library', 'assets/icons/ic_popcorn.png'),
+            ),
+            _buildOption(
+              context,
+              icon: Icons.tv,
+              label: 'TV Show',
+              onTap: () => _addToCollectionWithCategory('tv', 'TV Show', 'assets/icons/ic_popcorn.png'),
+            ),
+            _buildOption(
+              context,
+              icon: Icons.animation,
+              label: 'Anime Wall',
+              onTap: () => _addToCollectionWithCategory('anime', 'Anime Wall', 'assets/icons/ic_animation.png'),
+            ),
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOption(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: AppTheme.primary.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, color: AppTheme.primary, size: 20),
+      ),
+      title: Text(
+        label,
+        style: const TextStyle(fontWeight: FontWeight.bold),
+      ),
+      trailing: const Icon(Icons.chevron_right, color: AppColors.textTertiary),
+      onTap: () {
+        Navigator.pop(context);
+        onTap();
+      },
+    );
+  }
+
+  Future<void> _addToCollectionWithCategory(String mediaType, String categoryLabel, String iconPath) async {
+    try {
+      final modifiedMedia = widget.media.copyWith(
+        mediaType: mediaType,
+      );
+
+      final id = await _repository.addToCollection(modifiedMedia, status: 'wish');
+      setState(() {
+        _isCollected = true;
+        _watchStatus = 'wish';
+        _collectionId = id;
+      });
+
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          type: SnackBarType.success,
+          message: '已加入$categoryLabel想看',
+          customIcon: Image.asset(
+            iconPath,
+            width: 24,
+            height: 24,
+            fit: BoxFit.contain,
+          ),
+          customColor: AppTheme.primary,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        AppSnackBar.showError(context, message: '添加失败: $e');
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bgColor = Theme.of(context).scaffoldBackgroundColor;
@@ -290,7 +399,13 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
           ),
 
         InkWell(
-          onTap: _showWatchStatusSheet,
+          onTap: () {
+            if (_isCollected) {
+              _showWatchStatusSheet();
+            } else {
+              _showCategorySheet();
+            }
+          },
           borderRadius: BorderRadius.circular(12),
           child: Container(
             padding: const EdgeInsets.all(8),

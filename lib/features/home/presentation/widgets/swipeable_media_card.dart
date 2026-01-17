@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../../../core/domain/entities/media.dart';
 import '../../../../app/theme/app_colors.dart';
 
@@ -54,6 +55,14 @@ class SwipeableMediaCard extends StatelessWidget {
                 ),
               ),
             ),
+
+            // Maoyan Release Date Seal
+            if (media.sourceType == 'maoyan' && media.releaseDate.isNotEmpty)
+              Positioned(
+                top: 12,
+                left: 12,
+                child: _buildReleaseDateSeal(media.releaseDate),
+              ),
 
             // Text Content
             Padding(
@@ -157,6 +166,70 @@ class SwipeableMediaCard extends StatelessWidget {
       width: size,
       height: size,
       fit: BoxFit.contain,
+    );
+  }
+
+  Widget _buildReleaseDateSeal(String releaseDate) {
+    // Validate date format
+    if (releaseDate.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: 90,
+      height: 90,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.15),
+        shape: BoxShape.circle,
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // SVG Seal Icon - Horizontally flipped
+          Transform(
+            alignment: Alignment.center,
+            transform: Matrix4.rotationY(3.14159), // Flip horizontally (π radians)
+            child: SvgPicture.asset(
+              'assets/icons/ic_seal_date.svg',
+              width: 130,
+              height: 130,
+              colorFilter: ColorFilter.mode(
+                Colors.white.withValues(alpha: 0.7),
+                BlendMode.srcIn,
+              ),
+            ),
+          ),
+          // Date Text Overlay
+          Transform.rotate(
+            angle: -0.55,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              constraints: const BoxConstraints(maxWidth: 85), // Constrain width
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  releaseDate,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.2,
+                    shadows: [
+                      Shadow(
+                        color: Colors.black,
+                        blurRadius: 3,
+                        offset: Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.visible,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

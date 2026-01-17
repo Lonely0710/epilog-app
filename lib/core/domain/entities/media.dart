@@ -27,8 +27,7 @@ class Media {
   // 状态
   final bool isCollected;
   final String collectionId; // 收藏记录ID
-  final String?
-      watchingStatus; // 'wish', 'watching', 'watched', 'dropped', 'on_hold'
+  final String? watchingStatus; // 'wish', 'watching', 'watched', 'dropped', 'on_hold'
   final List<String> genres; // 电影类型
   final bool isNew; // 是否新上映
   final String wish; // 想看人数
@@ -76,6 +75,33 @@ class Media {
       summary: '',
       staff: '',
       rating: 0.0,
+    );
+  }
+
+  factory Media.fromJson(Map<String, dynamic> json) {
+    return Media(
+      sourceType: json['sourceType'] ?? '',
+      sourceId: json['sourceId'] ?? '',
+      sourceUrl: json['sourceUrl'] ?? '',
+      mediaType: json['mediaType'] ?? '',
+      titleZh: json['titleZh'] ?? '',
+      titleOriginal: json['titleOriginal'] ?? '',
+      releaseDate: json['releaseDate'] ?? '',
+      duration: json['duration'] ?? '',
+      year: json['year'] ?? '',
+      posterUrl: json['posterUrl'] ?? '',
+      summary: json['summary'] ?? '',
+      staff: json['staff'] ?? '',
+      directors: (json['directors'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      actors: (json['actors'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
+      ratingDouban: (json['ratingDouban'] as num?)?.toDouble() ?? 0.0,
+      ratingImdb: (json['ratingImdb'] as num?)?.toDouble() ?? 0.0,
+      ratingBangumi: (json['ratingBangumi'] as num?)?.toDouble() ?? 0.0,
+      ratingMaoyan: (json['ratingMaoyan'] as num?)?.toDouble() ?? 0.0,
+      genres: (json['genres'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      wish: json['wish'] ?? '',
+      isNew: json['isNew'] ?? false,
     );
   }
 

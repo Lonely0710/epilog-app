@@ -22,33 +22,29 @@ final homeFeedProvider = FutureProvider.autoDispose.family<List<Media>, int>((re
   try {
     List<Media> items = [];
     switch (index) {
-      case 0: // Bangumi (Anime) - At Index 0 (Live TV icon)
-        // Weekly Calendar (Today) + Trends
-        final schedule = await bangumiService.getWeeklySchedule();
-        final List<Media> todayItems = [];
-        final now = DateTime.now();
-        final weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        final todayKey = weekdays[now.weekday - 1]; // DateTime.weekday: 1=Mon
-        if (schedule.containsKey(todayKey)) {
-          todayItems.addAll(schedule[todayKey]!);
-        }
-
-        final trends = await bangumiService.getTrends();
-        items = [...todayItems, ...trends];
-        break;
-      case 1: // Maoyan (Movies) - At Index 1 (Movie icon)
-        items = await maoyanService.getMoviesOnShowing();
-        break;
-      case 2: // Discover (TMDb) - At Index 2 (Bilibili icon/Trends)
-        // Fetch Top Rated This Year first
+      case 0: // Movies & TV (TMDb)
         final topMovies = await tmdbService.getTopRatedMoviesThisYear();
         final topTv = await tmdbService.getTopRatedTVShowsThisYear();
         items = [...topMovies, ...topTv];
         if (items.isEmpty) {
-          // Fallback to general top rated
           final allTime = await tmdbService.getTopRatedMovies();
           items = allTime;
         }
+        break;
+      case 1: // Maoyan (Movies)
+        items = await maoyanService.getMoviesOnShowing();
+        break;
+      case 2: // Bangumi (Anime)
+        final schedule = await bangumiService.getWeeklySchedule();
+        final List<Media> todayItems = [];
+        final now = DateTime.now();
+        final weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        final todayKey = weekdays[now.weekday - 1];
+        if (schedule.containsKey(todayKey)) {
+          todayItems.addAll(schedule[todayKey]!);
+        }
+        final trends = await bangumiService.getTrends();
+        items = [...todayItems, ...trends];
         break;
       case 3: // Collection
         items = [];
@@ -164,7 +160,7 @@ class _HomeContentState extends ConsumerState<HomeContent> {
       height: 60,
       padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 8),
       child: GestureDetector(
-        onTap: () => context.push('/search'),
+        onTap: () => context.push('/search?type=all'),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
@@ -184,7 +180,7 @@ class _HomeContentState extends ConsumerState<HomeContent> {
               ),
               const SizedBox(width: 8),
               Text(
-                'Search Movies, TV, Anime...',
+                '搜索电视剧、电影、动漫...',
                 style: TextStyle(
                   color: isDark ? AppColors.textTertiary : AppColors.textSecondary,
                   fontSize: 14,
