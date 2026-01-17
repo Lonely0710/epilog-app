@@ -273,10 +273,6 @@ class _SearchPageState extends State<SearchPage> {
                                   return SearchResultItem(
                                     result: _results[index],
                                     searchType: widget.searchType,
-                                    onTap: () {
-                                      // Optional: Handle item tap if unrelated to specific buttons
-                                      _searchFocusNode.unfocus();
-                                    },
                                   );
                                 },
                               ),

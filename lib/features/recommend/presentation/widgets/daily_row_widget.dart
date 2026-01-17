@@ -158,10 +158,7 @@ class DailyRowWidget extends StatelessWidget {
                 text: TextSpan(
                   style: TextStyle(
                     fontSize: 10,
-                    color: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.color, // Base color for "共" and "部"
+                    color: Theme.of(context).textTheme.bodySmall?.color, // Base color for "共" and "部"
                     fontFamily: 'FangZheng', // Use custom font
                   ),
                   children: [
@@ -171,10 +168,7 @@ class DailyRowWidget extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12, // Larger font for number
                         fontWeight: FontWeight.bold,
-                        color: Theme.of(context)
-                            .textTheme
-                            .bodyMedium
-                            ?.color, // Darker color for number
+                        color: Theme.of(context).textTheme.bodyMedium?.color, // Darker color for number
                       ),
                     ),
                     const TextSpan(text: ' 部'),
@@ -188,14 +182,10 @@ class DailyRowWidget extends StatelessWidget {
         Container(
           width: 120,
           height: 2,
-          decoration: BoxDecoration(
-              color: Theme.of(context).dividerColor.withValues(alpha: 0.5),
-              boxShadow: [
-                BoxShadow(
-                    color: Theme.of(context).shadowColor.withValues(alpha: 0.1),
-                    blurRadius: 2,
-                    offset: const Offset(0, 1))
-              ]),
+          decoration: BoxDecoration(color: Theme.of(context).dividerColor.withValues(alpha: 0.5), boxShadow: [
+            BoxShadow(
+                color: Theme.of(context).shadowColor.withValues(alpha: 0.1), blurRadius: 2, offset: const Offset(0, 1))
+          ]),
         )
       ],
     );
@@ -250,14 +240,11 @@ class DailyRowWidget extends StatelessWidget {
                   fit: BoxFit.cover,
                   placeholder: (context, url) => Container(
                     color: AppColors.surfaceVariant,
-                    child: Center(
-                        child: Icon(Icons.image,
-                            size: 20, color: AppColors.textTertiary)),
+                    child: Center(child: Icon(Icons.image, size: 20, color: AppColors.textTertiary)),
                   ),
-                  errorWidget: (context, url, error) => Container(
-                    color: AppColors.surfaceVariant,
-                    child: const Icon(Icons.broken_image,
-                        size: 20, color: AppColors.textTertiary),
+                  errorWidget: (context, url, error) => Image.asset(
+                    'assets/icons/ic_np_poster.png',
+                    fit: BoxFit.cover,
                   ),
                 ),
               ),
@@ -274,9 +261,7 @@ class DailyRowWidget extends StatelessWidget {
                       begin: Alignment.bottomCenter,
                       end: Alignment.topCenter,
                       colors: [
-                        Colors.black.withValues(
-                            alpha:
-                                0.8), // Keep black for readability over image
+                        Colors.black.withValues(alpha: 0.8), // Keep black for readability over image
                         Colors.transparent,
                       ],
                     ),
@@ -348,16 +333,14 @@ class DailyRowWidget extends StatelessWidget {
         final index = today.weekday % 7;
 
         return Dialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           backgroundColor: Theme.of(context).cardColor,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               // Header Image with Day-based Crop (Logo)
               ClipRRect(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(16)),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                 child: SizedBox(
                   height: 60, // Smaller header
                   width: double.infinity,
@@ -372,8 +355,7 @@ class DailyRowWidget extends StatelessWidget {
                             return Container(
                               color: AppColors.surfaceVariant,
                               child: Center(
-                                child: Icon(Icons.image_not_supported,
-                                    color: AppColors.textTertiary),
+                                child: Icon(Icons.image_not_supported, color: AppColors.textTertiary),
                               ),
                             );
                           },
@@ -384,13 +366,11 @@ class DailyRowWidget extends StatelessWidget {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(
-                    20, 10, 20, 24), // 调整 top (10) 可以控制整体上移程度
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 24), // 调整 top (10) 可以控制整体上移程度
                 child: Column(
                   children: [
                     Row(
-                      crossAxisAlignment: CrossAxisAlignment
-                          .center, // Vertically center alignment
+                      crossAxisAlignment: CrossAxisAlignment.center, // Vertically center alignment
                       children: [
                         // Left: Character Image (Musume)
                         SizedBox(
@@ -411,9 +391,7 @@ class DailyRowWidget extends StatelessWidget {
                                   fit: BoxFit.cover,
                                   alignment: Alignment(alignX, 0.0),
                                   errorBuilder: (context, error, stackTrace) {
-                                    return const Center(
-                                        child: Icon(Icons.person,
-                                            color: AppColors.textTertiary));
+                                    return const Center(child: Icon(Icons.person, color: AppColors.textTertiary));
                                   },
                                 ),
                               );
@@ -424,20 +402,15 @@ class DailyRowWidget extends StatelessWidget {
                         // Right: Text Content
                         Expanded(
                           child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.center, // Horizontal Center
-                            mainAxisAlignment:
-                                MainAxisAlignment.start, // Vertical Top
+                            crossAxisAlignment: CrossAxisAlignment.center, // Horizontal Center
+                            mainAxisAlignment: MainAxisAlignment.start, // Vertical Top
                             children: [
                               Text(
                                 'Bangumi 番组计划',
                                 style: TextStyle(
                                   fontSize: 20,
                                   fontWeight: FontWeight.bold,
-                                  color: Theme.of(context)
-                                      .textTheme
-                                      .bodyLarge
-                                      ?.color,
+                                  color: Theme.of(context).textTheme.bodyLarge?.color,
                                 ),
                               ),
                               const SizedBox(height: 8),
@@ -446,10 +419,7 @@ class DailyRowWidget extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  color: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.color,
+                                  color: Theme.of(context).textTheme.bodyMedium?.color,
                                   fontSize: 13,
                                 ),
                               ),

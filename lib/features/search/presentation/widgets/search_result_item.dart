@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/domain/entities/media.dart';
 import 'package:drama_tracker_flutter/features/search/presentation/widgets/circular_rating.dart';
@@ -11,21 +12,41 @@ import '../../../../features/collections/data/repositories/collection_repository
 
 class SearchResultItem extends StatelessWidget {
   final Media result;
-  final VoidCallback? onTap;
   final String searchType;
 
   const SearchResultItem({
     super.key,
     required this.result,
-    this.onTap,
     this.searchType = 'anime',
   });
 
   @override
   Widget build(BuildContext context) {
     final textColor = Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black;
-    return InkWell(
-      onTap: onTap,
+    return _ScaleButton(
+      onTap: () {
+        // Determine URL based on source
+        String url = result.sourceUrl;
+        if (url.isEmpty) {
+          if (result.sourceType == 'douban') {
+            url = 'https://movie.douban.com/subject/${result.sourceId}';
+          } else if (result.sourceType == 'bgm') {
+            url = 'https://chii.in/subject/${result.sourceId}';
+          } else if (result.sourceType == 'maoyan') {
+            url = 'https://m.maoyan.com/movie/${result.sourceId}';
+          } else if (result.sourceType == 'tmdb') {
+            url = 'https://www.themoviedb.org/${result.mediaType}/${result.sourceId}';
+          }
+        }
+
+        context.push(
+          '/webview',
+          extra: WebBrowserPageArgs.fromSiteType(
+            siteType: _mapSourceToSiteType(result.sourceType),
+            url: url,
+          ),
+        );
+      },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
         child: Row(
@@ -46,67 +67,18 @@ class SearchResultItem extends StatelessWidget {
                       height: 115,
                       color: AppColors.placeholder,
                     ),
-                    errorWidget: (context, url, error) => Container(
-                      width: 80,
-                      height: 115,
-                      color: AppColors.placeholder,
-                      child: Icon(Icons.broken_image, color: AppColors.textTertiary),
+                    errorWidget: (context, url, error) => Image.asset(
+                      'assets/icons/ic_np_poster.png',
+                      fit: BoxFit.cover,
                     ),
                   ),
                 ),
                 const SizedBox(height: 8),
-                InkWell(
-                  onTap: () {
-                    // Determine URL based on source
-                    String url = result.sourceUrl;
-                    if (url.isEmpty) {
-                      if (result.sourceType == 'douban') {
-                        url = 'https://movie.douban.com/subject/${result.sourceId}';
-                      } else if (result.sourceType == 'bgm') {
-                        url = 'https://chii.in/subject/${result.sourceId}';
-                      } else if (result.sourceType == 'maoyan') {
-                        url = 'https://m.maoyan.com/movie/${result.sourceId}';
-                      } else if (result.sourceType == 'tmdb') {
-                        url = 'https://www.themoviedb.org/${result.mediaType}/${result.sourceId}';
-                      }
-                    }
-
-                    context.push(
-                      '/webview',
-                      extra: WebBrowserPageArgs.fromSiteType(
-                        siteType: _mapSourceToSiteType(result.sourceType),
-                        url: url,
-                      ),
-                    );
-                  },
-                  borderRadius: BorderRadius.circular(6),
-                  child: Container(
-                    width: 80, // Match poster width
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: AppTheme.primary, width: 1.5),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'SITE',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.primary,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(
-                          Icons.open_in_new_rounded,
-                          size: 12,
-                          color: AppTheme.primary,
-                        ),
-                      ],
-                    ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: 80,
+                  child: Center(
+                    child: _CollectionStar(media: result),
                   ),
                 ),
               ],
@@ -317,7 +289,6 @@ class SearchResultItem extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        _CollectionStar(media: result),
                       ],
                     )
                   ] else ...[
@@ -361,7 +332,6 @@ class SearchResultItem extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        _CollectionStar(media: result),
                       ],
                     ),
                   ],
@@ -474,7 +444,6 @@ class _CollectionStar extends StatefulWidget {
 }
 
 class _CollectionStarState extends State<_CollectionStar> {
-  bool _isLoading = false;
   bool _isCollected = false;
   String? _collectionId;
   final _repo = CollectionRepositoryImpl();
@@ -501,24 +470,39 @@ class _CollectionStarState extends State<_CollectionStar> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const SizedBox(
-        width: 24,
-        height: 24,
-        child: Padding(
-          padding: EdgeInsets.all(4.0),
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
-      );
-    }
-
     return InkWell(
       onTap: _handleTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Icon(
-        _isCollected ? Icons.star_rounded : Icons.star_border_rounded,
-        color: _getStatusColor(),
-        size: 24,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        width: 80, // Match poster width
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: _isCollected ? AppColors.starActive : AppTheme.primary,
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              _isCollected ? '已想看' : '想看',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: _isCollected ? AppColors.starActive : AppTheme.primary,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              _isCollected ? Icons.star_rounded : Icons.star_border_rounded,
+              color: _isCollected ? AppColors.starActive : AppTheme.primary,
+              size: 14,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -527,20 +511,25 @@ class _CollectionStarState extends State<_CollectionStar> {
     if (_isCollected) {
       // Toggle Remove
       if (_collectionId != null) {
-        setState(() => _isLoading = true);
+        // Optimistic UI: Update state immediately
+        final previousId = _collectionId;
+        setState(() {
+          _isCollected = false;
+          _collectionId = null;
+        });
+
         try {
-          await _repo.removeFromCollection(_collectionId!);
+          await _repo.removeFromCollection(previousId!);
           if (mounted) {
-            setState(() {
-              _isLoading = false;
-              _isCollected = false;
-              _collectionId = null;
-            });
             AppSnackBar.showInfo(context, '已从收藏中移除');
           }
         } catch (e) {
+          // Revert on failure
           if (mounted) {
-            setState(() => _isLoading = false);
+            setState(() {
+              _isCollected = true; // Revert to collected
+              _collectionId = previousId;
+            });
             AppSnackBar.showError(context, message: '移除失败: $e');
           }
         }
@@ -573,21 +562,21 @@ class _CollectionStarState extends State<_CollectionStar> {
             ),
             _buildOption(
               context,
-              icon: Icons.movie_creation_outlined,
+              iconWidget: Icon(Icons.movie_creation_outlined, color: AppTheme.primary, size: 20),
               label: 'Movie Library',
               onTap: () => _addToCollection('movie', 'Movie Library', 'assets/icons/ic_popcorn.png'),
             ),
             _buildOption(
               context,
-              icon: Icons.tv,
+              iconWidget: Icon(Icons.tv, color: AppTheme.primary, size: 20),
               label: 'TV Show',
               onTap: () => _addToCollection('tv', 'TV Show', 'assets/icons/ic_popcorn.png'),
             ),
             _buildOption(
               context,
-              icon: Icons.animation,
+              iconWidget: Image.asset('assets/icons/ic_bilibili.png', width: 20, height: 20),
               label: 'Anime Wall',
-              onTap: () => _addToCollection('anime', 'Anime Wall', 'assets/icons/ic_animation.png'),
+              onTap: () => _addToCollection('anime', 'Anime Wall', 'assets/icons/ic_bilibili.png'),
             ),
             const SizedBox(height: 10),
           ],
@@ -598,7 +587,7 @@ class _CollectionStarState extends State<_CollectionStar> {
 
   Widget _buildOption(
     BuildContext context, {
-    required IconData icon,
+    required Widget iconWidget,
     required String label,
     required VoidCallback onTap,
   }) {
@@ -609,7 +598,7 @@ class _CollectionStarState extends State<_CollectionStar> {
           color: AppTheme.primary.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(icon, color: AppTheme.primary, size: 20),
+        child: iconWidget,
       ),
       title: Text(
         label,
@@ -624,7 +613,25 @@ class _CollectionStarState extends State<_CollectionStar> {
   }
 
   Future<void> _addToCollection(String mediaType, String categoryLabel, String iconPath) async {
-    setState(() => _isLoading = true);
+    // Optimistic UI: Update state immediately
+    setState(() {
+      _isCollected = true;
+    });
+
+    // Show success feedback immediately (Optional: could wait for real success, but this feels faster)
+    AppSnackBar.show(
+      context,
+      type: SnackBarType.success,
+      message: '已加入$categoryLabel想看',
+      customIcon: Image.asset(
+        iconPath,
+        width: 24,
+        height: 24,
+        fit: BoxFit.contain,
+      ),
+      customColor: AppTheme.primary,
+    );
+
     try {
       // modify media type
       final modifiedMedia = widget.media.copyWith(
@@ -634,34 +641,69 @@ class _CollectionStarState extends State<_CollectionStar> {
       final newId = await _repo.addToCollection(modifiedMedia, status: 'wish');
       if (mounted) {
         setState(() {
-          _isLoading = false;
-          _isCollected = true;
           _collectionId = newId;
         });
-
-        AppSnackBar.show(
-          context,
-          type: SnackBarType.success,
-          message: '已加入$categoryLabel想看',
-          customIcon: Image.asset(
-            iconPath,
-            width: 24,
-            height: 24,
-            fit: BoxFit.contain,
-          ),
-          customColor: AppTheme.primary,
-        );
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoading = false);
+        // Revert State
+        setState(() {
+          _isCollected = false;
+          _collectionId = null;
+        });
         AppSnackBar.showError(context, message: '添加失败: $e');
       }
     }
   }
+}
 
-  Color _getStatusColor() {
-    if (!_isCollected) return AppColors.starInactive;
-    return AppColors.starActive;
+class _ScaleButton extends StatefulWidget {
+  final VoidCallback onTap;
+  final Widget child;
+
+  const _ScaleButton({required this.onTap, required this.child});
+
+  @override
+  State<_ScaleButton> createState() => _ScaleButtonState();
+}
+
+class _ScaleButtonState extends State<_ScaleButton> {
+  bool _isPressed = false;
+
+  @override
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return AnimatedScale(
+      scale: _isPressed ? 0.95 : 1.0,
+      duration: const Duration(milliseconds: 100),
+      curve: Curves.easeInOut,
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _isPressed = true),
+        onTapUp: (_) {
+          setState(() => _isPressed = false);
+          HapticFeedback.mediumImpact();
+          widget.onTap();
+        },
+        onTapCancel: () => setState(() => _isPressed = false),
+        child: Stack(
+          children: [
+            widget.child,
+            Positioned.fill(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 100),
+                decoration: BoxDecoration(
+                  color: _isPressed
+                      ? (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.05))
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

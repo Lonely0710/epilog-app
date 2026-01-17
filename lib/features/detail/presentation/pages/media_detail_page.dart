@@ -36,10 +36,38 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
   }
 
   Future<void> _updateWatchStatus(String status) async {
+    // Optimistic UI: Update state immediately
+    final previousStatus = _watchStatus;
+    final previousIsCollected = _isCollected;
+
     setState(() {
       _watchStatus = status;
       _isCollected = true;
     });
+
+    // Show feedback immediately
+    if (mounted) {
+      String statusText = '想看';
+      switch (status) {
+        case 'watching':
+          statusText = '在看';
+          break;
+        case 'watched':
+          statusText = '看过';
+          break;
+        case 'on_hold':
+          statusText = '搁置';
+          break;
+      }
+
+      AppSnackBar.show(
+        context,
+        type: SnackBarType.success,
+        message: '已标记为$statusText',
+        customIcon: Icon(Icons.bookmark, color: AppColors.starActive, size: 24),
+        customColor: AppColors.starActive,
+      );
+    }
 
     try {
       if (_collectionId.isNotEmpty) {
@@ -47,11 +75,20 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
       } else {
         // If not collected yet, add it
         final id = await _repository.addToCollection(widget.media, status: status);
-        _collectionId = id;
+        if (mounted) {
+          setState(() {
+            _collectionId = id;
+          });
+        }
       }
     } catch (e) {
       log('Error updating status: $e');
       if (mounted) {
+        // Revert State
+        setState(() {
+          _watchStatus = previousStatus;
+          _isCollected = previousIsCollected;
+        });
         AppSnackBar.showError(context, message: '更新失败: $e');
       }
     }
@@ -98,21 +135,21 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
             ),
             _buildOption(
               context,
-              icon: Icons.movie_creation_outlined,
+              iconWidget: Icon(Icons.movie_creation_outlined, color: AppTheme.primary, size: 20),
               label: 'Movie Library',
               onTap: () => _addToCollectionWithCategory('movie', 'Movie Library', 'assets/icons/ic_popcorn.png'),
             ),
             _buildOption(
               context,
-              icon: Icons.tv,
+              iconWidget: Icon(Icons.tv, color: AppTheme.primary, size: 20),
               label: 'TV Show',
               onTap: () => _addToCollectionWithCategory('tv', 'TV Show', 'assets/icons/ic_popcorn.png'),
             ),
             _buildOption(
               context,
-              icon: Icons.animation,
+              iconWidget: Image.asset('assets/icons/ic_bilibili.png', width: 20, height: 20),
               label: 'Anime Wall',
-              onTap: () => _addToCollectionWithCategory('anime', 'Anime Wall', 'assets/icons/ic_animation.png'),
+              onTap: () => _addToCollectionWithCategory('anime', 'Anime Wall', 'assets/icons/ic_bilibili.png'),
             ),
             const SizedBox(height: 10),
           ],
@@ -123,7 +160,7 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
 
   Widget _buildOption(
     BuildContext context, {
-    required IconData icon,
+    required Widget iconWidget,
     required String label,
     required VoidCallback onTap,
   }) {
@@ -134,7 +171,7 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
           color: AppTheme.primary.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(icon, color: AppTheme.primary, size: 20),
+        child: iconWidget,
       ),
       title: Text(
         label,
@@ -149,34 +186,45 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
   }
 
   Future<void> _addToCollectionWithCategory(String mediaType, String categoryLabel, String iconPath) async {
+    // Optimistic UI: Update state immediately
+    setState(() {
+      _isCollected = true;
+      _watchStatus = 'wish';
+    });
+
+    // Show success feedback immediately
+    AppSnackBar.show(
+      context,
+      type: SnackBarType.success,
+      message: '已加入$categoryLabel想看',
+      customIcon: Image.asset(
+        iconPath,
+        width: 24,
+        height: 24,
+        fit: BoxFit.contain,
+      ),
+      customColor: AppTheme.primary,
+    );
+
     try {
       final modifiedMedia = widget.media.copyWith(
         mediaType: mediaType,
       );
 
       final id = await _repository.addToCollection(modifiedMedia, status: 'wish');
-      setState(() {
-        _isCollected = true;
-        _watchStatus = 'wish';
-        _collectionId = id;
-      });
-
       if (mounted) {
-        AppSnackBar.show(
-          context,
-          type: SnackBarType.success,
-          message: '已加入$categoryLabel想看',
-          customIcon: Image.asset(
-            iconPath,
-            width: 24,
-            height: 24,
-            fit: BoxFit.contain,
-          ),
-          customColor: AppTheme.primary,
-        );
+        setState(() {
+          _collectionId = id;
+        });
       }
     } catch (e) {
       if (mounted) {
+        // Revert State
+        setState(() {
+          _isCollected = false;
+          _watchStatus = 'wish'; // or reset to previous logic if complex
+          _collectionId = '';
+        });
         AppSnackBar.showError(context, message: '添加失败: $e');
       }
     }
@@ -278,9 +326,9 @@ class _MediaDetailPageState extends State<MediaDetailPage> {
                     child: CircularProgressIndicator(color: AppColors.primary),
                   ),
                 ),
-                errorWidget: (context, url, error) => Container(
-                  color: AppColors.surfaceDeep,
-                  child: Icon(Icons.error, color: AppColors.textOnDark.withValues(alpha: 0.5)),
+                errorWidget: (context, url, error) => Image.asset(
+                  'assets/icons/ic_np_poster.png',
+                  fit: BoxFit.cover,
                 ),
               ),
             ),

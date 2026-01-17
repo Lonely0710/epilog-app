@@ -43,8 +43,7 @@ class LibraryPosterItem extends StatelessWidget {
                         child: Center(
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                                AppColors.textOnDark.withValues(alpha: 0.3)),
+                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.textOnDark.withValues(alpha: 0.3)),
                           ),
                         ),
                       ),
@@ -87,32 +86,9 @@ class LibraryPosterItem extends StatelessWidget {
   }
 
   Widget _buildErrorWidget() {
-    return Container(
-      color: AppColors.surfaceDeep,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.movie_outlined,
-            color: AppColors.textOnDark.withValues(alpha: 0.3),
-            size: 32,
-          ),
-          const SizedBox(height: 4),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Text(
-              media.titleZh.isNotEmpty ? media.titleZh : media.titleOriginal,
-              style: TextStyle(
-                color: AppColors.textOnDark.withValues(alpha: 0.5),
-                fontSize: 10,
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
+    return Image.asset(
+      'assets/icons/ic_np_poster.png',
+      fit: BoxFit.cover,
     );
   }
 }

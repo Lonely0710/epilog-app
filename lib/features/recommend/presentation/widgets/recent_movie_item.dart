@@ -53,16 +53,12 @@ class RecentMovieItem extends StatelessWidget {
                         placeholder: (context, url) => Container(
                           color: AppColors.surfaceVariant,
                           child: Center(
-                            child: Icon(Icons.image,
-                                color: AppColors.textTertiary),
+                            child: Icon(Icons.image, color: AppColors.textTertiary),
                           ),
                         ),
-                        errorWidget: (context, url, error) => Container(
-                          color: AppColors.surfaceVariant,
-                          child: Center(
-                            child: Icon(Icons.broken_image,
-                                color: AppColors.textTertiary),
-                          ),
+                        errorWidget: (context, url, error) => Image.asset(
+                          'assets/icons/ic_np_poster.png',
+                          fit: BoxFit.cover,
                         ),
                       ),
                       // Rating Badge
@@ -71,8 +67,7 @@ class RecentMovieItem extends StatelessWidget {
                           top: 0,
                           right: 0,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: const BoxDecoration(
                               color: AppColors.primary,
                               borderRadius: BorderRadius.only(
@@ -133,8 +128,7 @@ class RecentMovieItem extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (movie.titleOriginal.isNotEmpty &&
-                        movie.titleOriginal != movie.titleZh)
+                    if (movie.titleOriginal.isNotEmpty && movie.titleOriginal != movie.titleZh)
                       Text(
                         movie.titleOriginal,
                         style: TextStyle(
@@ -163,16 +157,12 @@ class RecentMovieItem extends StatelessWidget {
                                   ),
                                 ),
                               )),
-                        if (movie.duration.isNotEmpty &&
-                            movie.duration != '0分钟')
+                        if (movie.duration.isNotEmpty && movie.duration != '0分钟')
                           Text(
                             movie.duration,
                             style: TextStyle(
                                 fontSize: 12,
-                                color: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.color,
+                                color: Theme.of(context).textTheme.bodySmall?.color,
                                 fontWeight: FontWeight.bold,
                                 fontFamily: AppTheme.primaryFont),
                           ),
@@ -196,10 +186,7 @@ class RecentMovieItem extends StatelessWidget {
                               movie.actors.join(' / '),
                               style: TextStyle(
                                 fontSize: 13,
-                                color: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.color,
+                                color: Theme.of(context).textTheme.bodyMedium?.color,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,

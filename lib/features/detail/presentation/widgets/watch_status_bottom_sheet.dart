@@ -64,9 +64,9 @@ class WatchStatusBottomSheet extends StatelessWidget {
             context,
             isDark: isDark,
             status: 'wish',
-            icon: Icons.star_border_rounded,
+            icon: Icons.bookmark_outline,
             label: '想看',
-            sublabel: 'Want to watch',
+            sublabel: 'Watch',
           ),
           _buildStatusOption(
             context,
@@ -74,7 +74,7 @@ class WatchStatusBottomSheet extends StatelessWidget {
             status: 'watching',
             icon: Icons.play_circle_outline_rounded,
             label: '在看',
-            sublabel: 'Currently watching',
+            sublabel: 'Watching',
           ),
           _buildStatusOption(
             context,
@@ -101,12 +101,9 @@ class WatchStatusBottomSheet extends StatelessWidget {
   }
 
   Widget _buildMediaHeader(BuildContext context, bool isDark) {
-    final textPrimary =
-        Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black;
-    final textSecondary =
-        Theme.of(context).textTheme.bodyMedium?.color ?? Colors.grey;
-    final placeholderColor =
-        isDark ? AppColors.surfaceDark : AppColors.placeholder;
+    final textPrimary = Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black;
+    final textSecondary = Theme.of(context).textTheme.bodyMedium?.color ?? Colors.grey;
+    final placeholderColor = isDark ? AppColors.surfaceDark : AppColors.placeholder;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -124,14 +121,12 @@ class WatchStatusBottomSheet extends StatelessWidget {
                       fit: BoxFit.cover,
                       errorWidget: (context, url, error) => Container(
                         color: placeholderColor,
-                        child: Icon(Icons.movie_outlined,
-                            color: textSecondary, size: 24),
+                        child: Icon(Icons.movie_outlined, color: textSecondary, size: 24),
                       ),
                     )
                   : Container(
                       color: placeholderColor,
-                      child: Icon(Icons.movie_outlined,
-                          color: textSecondary, size: 24),
+                      child: Icon(Icons.movie_outlined, color: textSecondary, size: 24),
                     ),
             ),
           ),
@@ -144,9 +139,7 @@ class WatchStatusBottomSheet extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  media.titleZh.isNotEmpty
-                      ? media.titleZh
-                      : media.titleOriginal,
+                  media.titleZh.isNotEmpty ? media.titleZh : media.titleOriginal,
                   style: TextStyle(
                     color: textPrimary,
                     fontSize: 16,
@@ -200,11 +193,9 @@ class WatchStatusBottomSheet extends StatelessWidget {
     required String sublabel,
   }) {
     final isSelected = currentStatus == status;
-    final primaryColor = AppColors.primary;
-    final textPrimary =
-        Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black;
-    final textSecondary =
-        Theme.of(context).textTheme.bodyMedium?.color ?? Colors.grey;
+    final primaryColor = AppColors.starActive;
+    final textPrimary = Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black;
+    final textSecondary = Theme.of(context).textTheme.bodyMedium?.color ?? Colors.grey;
 
     return InkWell(
       onTap: () => onStatusSelected(status),
@@ -219,8 +210,7 @@ class WatchStatusBottomSheet extends StatelessWidget {
             ),
             const SizedBox(width: 16),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
                   Text(
                     label,
@@ -230,14 +220,12 @@ class WatchStatusBottomSheet extends StatelessWidget {
                       color: isSelected ? primaryColor : textPrimary,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(width: 8),
                   Text(
                     sublabel,
                     style: TextStyle(
                       fontSize: 14,
-                      color: isSelected
-                          ? primaryColor.withValues(alpha: 0.8)
-                          : textSecondary,
+                      color: isSelected ? primaryColor.withValues(alpha: 0.8) : textSecondary,
                     ),
                   ),
                 ],

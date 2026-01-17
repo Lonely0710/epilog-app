@@ -46,13 +46,11 @@ class TopRatedItem extends StatelessWidget {
                     fit: BoxFit.cover,
                     placeholder: (context, url) => Container(
                       color: Colors.grey[200],
-                      child: const Center(
-                          child: Icon(Icons.movie, color: Colors.grey)),
+                      child: const Center(child: Icon(Icons.movie, color: Colors.grey)),
                     ),
-                    errorWidget: (context, url, error) => Container(
-                      color: Colors.grey[200],
-                      child: const Center(
-                          child: Icon(Icons.broken_image, color: Colors.grey)),
+                    errorWidget: (context, url, error) => Image.asset(
+                      'assets/icons/ic_np_poster.png',
+                      fit: BoxFit.cover,
                     ),
                   ),
                 ),
@@ -68,8 +66,7 @@ class TopRatedItem extends StatelessWidget {
                   top: 4,
                   right: 4,
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                     decoration: BoxDecoration(
                       color: switch (rank) {
                         1 => const Color(0xFFFFC107),
@@ -85,9 +82,7 @@ class TopRatedItem extends StatelessWidget {
                         const Icon(Icons.star, size: 10, color: Colors.white),
                         const SizedBox(width: 2),
                         Text(
-                          media.ratingImdb > 0
-                              ? media.ratingImdb.toStringAsFixed(1)
-                              : 'N/A',
+                          media.ratingImdb > 0 ? media.ratingImdb.toStringAsFixed(1) : 'N/A',
                           style: TextStyle(
                               color: Colors.white,
                               fontSize: 10,
@@ -105,18 +100,14 @@ class TopRatedItem extends StatelessWidget {
                     bottom: 4,
                     right: 4,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 4, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                       decoration: BoxDecoration(
                         color: const Color(0xFF616161).withValues(alpha: 0.8),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
                         media.releaseDate,
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontFamily: AppTheme.primaryFont),
+                        style: TextStyle(color: Colors.white, fontSize: 12, fontFamily: AppTheme.primaryFont),
                       ),
                     ),
                   ),
