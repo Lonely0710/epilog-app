@@ -24,7 +24,7 @@ class _FilterSheetState extends State<FilterSheet> {
   String? selectedGenre;
 
   // Mock data as per requirement
-  final years = List.generate(11, (index) => 2025 - index); // 2025 - 2015
+  late final List<int> years;
   final genres = [
     '冒险',
     '剧情',
@@ -49,6 +49,8 @@ class _FilterSheetState extends State<FilterSheet> {
   @override
   void initState() {
     super.initState();
+    final currentYear = DateTime.now().year;
+    years = List.generate(11, (index) => currentYear - index);
     selectedYear = widget.initialYear;
     selectedGenre = widget.initialGenre;
   }
@@ -90,15 +92,14 @@ class _FilterSheetState extends State<FilterSheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('年份',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600, fontSize: 16)),
+                      style:
+                          Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600, fontSize: 16)),
                   const SizedBox(height: 12),
                   // Year Selector (iOS Style)
                   GestureDetector(
                     onTap: () => _showYearPicker(context),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
                         color: Theme.of(context).scaffoldBackgroundColor,
                         borderRadius: BorderRadius.circular(12),
@@ -112,16 +113,12 @@ class _FilterSheetState extends State<FilterSheet> {
                               fontSize: 15,
                               color: selectedYear == null
                                   ? AppColors.textTertiary
-                                  : Theme.of(context)
-                                      .textTheme
-                                      .bodyLarge
-                                      ?.color,
+                                  : Theme.of(context).textTheme.bodyLarge?.color,
                               fontFamily: AppTheme.primaryFont,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
-                          const Icon(Icons.keyboard_arrow_down_rounded,
-                              color: AppColors.textTertiary, size: 20),
+                          const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textTertiary, size: 20),
                         ],
                       ),
                     ),
@@ -129,8 +126,8 @@ class _FilterSheetState extends State<FilterSheet> {
 
                   const SizedBox(height: 24),
                   Text('类型',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600, fontSize: 16)),
+                      style:
+                          Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600, fontSize: 16)),
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
@@ -139,23 +136,17 @@ class _FilterSheetState extends State<FilterSheet> {
                       return ChoiceChip(
                         label: Text(g),
                         selected: selectedGenre == g,
-                        onSelected: (selected) =>
-                            setState(() => selectedGenre = selected ? g : null),
-                        backgroundColor:
-                            Theme.of(context).scaffoldBackgroundColor,
+                        onSelected: (selected) => setState(() => selectedGenre = selected ? g : null),
+                        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
                         selectedColor: AppColors.primary.withValues(alpha: 0.1),
                         labelStyle: TextStyle(
-                          color: selectedGenre == g
-                              ? AppColors.primary
-                              : Theme.of(context).textTheme.bodyMedium?.color,
+                          color: selectedGenre == g ? AppColors.primary : Theme.of(context).textTheme.bodyMedium?.color,
                           fontSize: 13,
                         ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                           side: BorderSide(
-                            color: selectedGenre == g
-                                ? AppColors.primary
-                                : Colors.transparent,
+                            color: selectedGenre == g ? AppColors.primary : Colors.transparent,
                           ),
                         ),
                         showCheckmark: false,
@@ -211,8 +202,7 @@ class _FilterSheetState extends State<FilterSheet> {
     }
 
     // Determine initial index
-    final initialItemIndex =
-        selectedYear != null ? years.indexOf(selectedYear!) : 0;
+    final initialItemIndex = selectedYear != null ? years.indexOf(selectedYear!) : 0;
 
     // We use a local variable to track selection inside the picker if we wanted "Cancel/Done" logic,
     // but for "Live Update" + "Done just closes", we keep current logic BUT
@@ -224,8 +214,7 @@ class _FilterSheetState extends State<FilterSheet> {
         height: 300,
         // Glassmorphism effect
         decoration: BoxDecoration(
-          color:
-              Theme.of(context).cardColor.withValues(alpha: 0.8), // Translucent
+          color: Theme.of(context).cardColor.withValues(alpha: 0.8), // Translucent
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           boxShadow: [
             BoxShadow(
@@ -249,11 +238,8 @@ class _FilterSheetState extends State<FilterSheet> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     alignment: Alignment.centerRight,
                     decoration: BoxDecoration(
-                      color: Theme.of(context).cardColor.withValues(
-                          alpha: 0.5), // Slightly more opaque for toolbar
-                      border: Border(
-                          bottom: BorderSide(
-                              color: AppColors.divider.withValues(alpha: 0.2))),
+                      color: Theme.of(context).cardColor.withValues(alpha: 0.5), // Slightly more opaque for toolbar
+                      border: Border(bottom: BorderSide(color: AppColors.divider.withValues(alpha: 0.2))),
                     ),
                     child: GestureDetector(
                       onTap: () => Navigator.pop(ctx),
@@ -287,10 +273,7 @@ class _FilterSheetState extends State<FilterSheet> {
                             style: TextStyle(
                               fontSize: 18,
                               fontFamily: AppTheme.primaryFont,
-                              color: Theme.of(context)
-                                  .textTheme
-                                  .bodyLarge
-                                  ?.color, // Ensure visibility
+                              color: Theme.of(context).textTheme.bodyLarge?.color, // Ensure visibility
                             ),
                           ),
                         );

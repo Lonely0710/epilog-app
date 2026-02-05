@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/domain/entities/media.dart';
@@ -75,12 +76,7 @@ class SearchResultItem extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 const SizedBox(height: 12),
-                SizedBox(
-                  width: 80,
-                  child: Center(
-                    child: _CollectionStar(media: result),
-                  ),
-                ),
+                _CollectionStar(media: result),
               ],
             ),
             const SizedBox(width: 12),
@@ -470,18 +466,37 @@ class _CollectionStarState extends State<_CollectionStar> {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: _handleTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        width: 80, // Match poster width
-        padding: const EdgeInsets.symmetric(vertical: 4),
+    // 使用 RawGestureDetector 配合 EagerGestureRecognizer 立即赢得手势竞技场
+    return RawGestureDetector(
+      gestures: <Type, GestureRecognizerFactory>{
+        _EagerTapGestureRecognizer: GestureRecognizerFactoryWithHandlers<_EagerTapGestureRecognizer>(
+          () => _EagerTapGestureRecognizer(),
+          (_EagerTapGestureRecognizer instance) {
+            instance.onTap = _handleTap;
+          },
+        ),
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        width: 86,
+        padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(6),
+          color: _isCollected ? AppTheme.primary : AppTheme.primary.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: _isCollected ? AppColors.starActive : AppTheme.primary,
+            color: _isCollected ? Colors.transparent : AppTheme.primary.withValues(alpha: 0.6),
             width: 1.5,
           ),
+          boxShadow: _isCollected
+              ? [
+                  BoxShadow(
+                    color: AppTheme.primary.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  )
+                ]
+              : null,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -489,17 +504,17 @@ class _CollectionStarState extends State<_CollectionStar> {
             Text(
               _isCollected ? '已想看' : '想看',
               style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: _isCollected ? AppColors.starActive : AppTheme.primary,
-                letterSpacing: 0.5,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: _isCollected ? Colors.white : AppTheme.primary,
+                letterSpacing: 1,
               ),
             ),
             const SizedBox(width: 4),
             Icon(
-              _isCollected ? Icons.star_rounded : Icons.star_border_rounded,
-              color: _isCollected ? AppColors.starActive : AppTheme.primary,
-              size: 14,
+              _isCollected ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+              color: _isCollected ? Colors.white : AppTheme.primary,
+              size: 18,
             ),
           ],
         ),
@@ -508,6 +523,7 @@ class _CollectionStarState extends State<_CollectionStar> {
   }
 
   Future<void> _handleTap() async {
+    HapticFeedback.mediumImpact(); // Tactile feedback
     if (_isCollected) {
       // Toggle Remove
       if (_collectionId != null) {
@@ -680,8 +696,10 @@ class _ScaleButtonState extends State<_ScaleButton> {
       duration: const Duration(milliseconds: 100),
       curve: Curves.easeInOut,
       child: GestureDetector(
+        // 使用 deferToChild 让子组件优先处理手势
+        behavior: HitTestBehavior.deferToChild,
         onTapDown: (_) => setState(() => _isPressed = true),
-        onTapUp: (_) {
+        onTap: () {
           setState(() => _isPressed = false);
           HapticFeedback.mediumImpact();
           widget.onTap();
@@ -691,13 +709,15 @@ class _ScaleButtonState extends State<_ScaleButton> {
           children: [
             widget.child,
             Positioned.fill(
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 100),
-                decoration: BoxDecoration(
-                  color: _isPressed
-                      ? (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.05))
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
+              child: IgnorePointer(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 100),
+                  decoration: BoxDecoration(
+                    color: _isPressed
+                        ? (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.05))
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
             ),
@@ -705,5 +725,13 @@ class _ScaleButtonState extends State<_ScaleButton> {
         ),
       ),
     );
+  }
+}
+
+class _EagerTapGestureRecognizer extends TapGestureRecognizer {
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    super.addAllowedPointer(event);
+    resolve(GestureDisposition.accepted);
   }
 }
