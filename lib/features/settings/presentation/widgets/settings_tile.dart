@@ -1,8 +1,11 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter_lucide_animated/flutter_lucide_animated.dart';
 
-class SettingsTile extends StatelessWidget {
-  final IconData icon;
+class SettingsTile extends StatefulWidget {
+  final LucideAnimatedIconData? icon;
+  final Widget Function(Color color, double size, int animationTick)?
+      animatedIconBuilder;
   final Color iconColor;
   final String title;
   final String subtitle;
@@ -11,18 +14,43 @@ class SettingsTile extends StatelessWidget {
 
   const SettingsTile({
     super.key,
-    required this.icon,
+    this.icon,
+    this.animatedIconBuilder,
     required this.iconColor,
     required this.title,
     required this.subtitle,
     required this.trailing,
     this.onTap,
-  });
+  }) : assert(
+          icon != null || animatedIconBuilder != null,
+          'Either icon or animatedIconBuilder must be provided.',
+        );
+
+  @override
+  State<SettingsTile> createState() => _SettingsTileState();
+}
+
+class _SettingsTileState extends State<SettingsTile> {
+  final LucideAnimatedIconController _iconController =
+      LucideAnimatedIconController();
+  int _animationTick = 0;
+
+  void _handleTap() {
+    _iconController.animate();
+    setState(() => _animationTick++);
+    widget.onTap?.call();
+  }
+
+  @override
+  void dispose() {
+    _iconController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: _handleTap,
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
@@ -57,7 +85,18 @@ class SettingsTile extends StatelessWidget {
                   // Icon
                   Container(
                     padding: const EdgeInsets.all(6),
-                    child: Icon(icon, color: iconColor, size: 24),
+                    child: widget.animatedIconBuilder?.call(
+                          widget.iconColor,
+                          24,
+                          _animationTick,
+                        ) ??
+                        LucideAnimatedIcon(
+                          icon: widget.icon!,
+                          color: widget.iconColor,
+                          size: 24,
+                          trigger: AnimationTrigger.manual,
+                          controller: _iconController,
+                        ),
                   ),
                   const SizedBox(width: 8),
                   // Text
@@ -67,7 +106,7 @@ class SettingsTile extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          title,
+                          widget.title,
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
@@ -76,7 +115,7 @@ class SettingsTile extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          subtitle,
+                          widget.subtitle,
                           style: TextStyle(
                             fontSize: 11,
                             color: Theme.of(context)
@@ -90,7 +129,7 @@ class SettingsTile extends StatelessWidget {
                     ),
                   ),
                   // Trailing
-                  trailing,
+                  widget.trailing,
                 ],
               ),
             ),

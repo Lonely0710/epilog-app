@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/theme/app_colors.dart';
-import '../../../../app/theme/app_theme.dart';
 import '../../../../core/domain/entities/media.dart';
 import '../../../../core/presentation/pages/web_browser_page.dart';
+import '../../../settings/presentation/widgets/settings_user_info.dart';
 
 class RecentMovieItem extends StatelessWidget {
   final Media movie;
@@ -18,8 +18,15 @@ class RecentMovieItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final secondaryTextColor = Theme.of(context).textTheme.bodyMedium?.color ??
+        AppColors.textSecondary;
+    final originalTitleColor = secondaryTextColor.withValues(
+      alpha: isDark ? 0.62 : 0.72,
+    );
+
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
@@ -33,7 +40,7 @@ class RecentMovieItem extends StatelessWidget {
         },
         borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(10),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -42,18 +49,19 @@ class RecentMovieItem extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
                 child: SizedBox(
                   width: 100,
-                  height: 140,
+                  height: 155,
                   child: Stack(
                     children: [
                       CachedNetworkImage(
                         imageUrl: movie.posterUrl,
                         fit: BoxFit.cover,
                         width: 100,
-                        height: 140,
+                        height: 155,
                         placeholder: (context, url) => Container(
                           color: AppColors.surfaceVariant,
                           child: Center(
-                            child: Icon(Icons.image, color: AppColors.textTertiary),
+                            child: Icon(Icons.image,
+                                color: AppColors.textTertiary),
                           ),
                         ),
                         errorWidget: (context, url, error) => Image.asset(
@@ -67,9 +75,17 @@ class RecentMovieItem extends StatelessWidget {
                           top: 0,
                           right: 0,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
                             decoration: const BoxDecoration(
-                              color: AppColors.primary,
+                              gradient: LinearGradient(
+                                colors: [
+                                  Color(0xFFFFD54F),
+                                  Color(0xFFFFA726),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
                               borderRadius: BorderRadius.only(
                                 bottomLeft: Radius.circular(8),
                               ),
@@ -79,8 +95,7 @@ class RecentMovieItem extends StatelessWidget {
                               style: TextStyle(
                                   color: AppColors.textOnPrimary,
                                   fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: AppTheme.primaryFont),
+                                  fontWeight: FontWeight.bold),
                             ),
                           ),
                         ),
@@ -98,10 +113,10 @@ class RecentMovieItem extends StatelessWidget {
                               movie.releaseDate,
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w800,
-                                  fontFamily: AppTheme.primaryFont),
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                              ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -128,32 +143,27 @@ class RecentMovieItem extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (movie.titleOriginal.isNotEmpty && movie.titleOriginal != movie.titleZh)
+                    if (movie.titleOriginal.isNotEmpty &&
+                        movie.titleOriginal != movie.titleZh)
                       Text(
                         movie.titleOriginal,
                         style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context).textTheme.bodySmall?.color,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: AppTheme.primaryFont),
+                          fontSize: 12,
+                          color: originalTitleColor,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.1,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
 
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
 
                     // Duration
                     if (movie.duration.isNotEmpty && movie.duration != '0分钟')
-                      Text(
-                        movie.duration,
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context).textTheme.bodySmall?.color,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: AppTheme.primaryFont),
-                      ),
+                      _DurationHighlight(duration: movie.duration),
 
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
 
                     // Directors
                     if (movie.directors.isNotEmpty) ...[
@@ -170,7 +180,10 @@ class RecentMovieItem extends StatelessWidget {
                               movie.directors.join(' / '),
                               style: TextStyle(
                                 fontSize: 13,
-                                color: Theme.of(context).textTheme.bodyMedium?.color,
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.color,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -178,7 +191,7 @@ class RecentMovieItem extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                     ],
 
                     // Staff / Actors
@@ -196,7 +209,10 @@ class RecentMovieItem extends StatelessWidget {
                               movie.actors.join(' / '),
                               style: TextStyle(
                                 fontSize: 13,
-                                color: Theme.of(context).textTheme.bodyMedium?.color,
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.color,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -205,7 +221,7 @@ class RecentMovieItem extends StatelessWidget {
                         ],
                       ),
 
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
 
                     // Summary
                     if (movie.summary.isNotEmpty)
@@ -241,6 +257,55 @@ class RecentMovieItem extends StatelessWidget {
         siteType: SiteType.maoyan, // Assuming Maoyan for RecentMovies
         url: url,
       ),
+    );
+  }
+}
+
+class _DurationHighlight extends StatelessWidget {
+  final String duration;
+
+  const _DurationHighlight({required this.duration});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final highlightColor = isDark
+        ? Colors.amber.withValues(alpha: 0.5)
+        : Theme.of(context).primaryColor.withValues(alpha: 0.22);
+    final textColor =
+        Theme.of(context).textTheme.bodySmall?.color ?? AppColors.textSecondary;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Baseline(
+          baseline: 13,
+          baselineType: TextBaseline.alphabetic,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                left: 1,
+                right: -5,
+                bottom: 1,
+                height: 9,
+                child: CustomPaint(
+                  painter: HighlighterPainter(color: highlightColor),
+                ),
+              ),
+              Text(
+                duration,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: textColor,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

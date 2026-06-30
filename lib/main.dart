@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:clerk_flutter/clerk_flutter.dart';
+import 'core/services/auth_bridge.dart';
 import 'core/services/convex_service.dart';
 
-import 'features/auth/data/auth_repository.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'app/app.dart';
 import 'app/presentation/splash_screen.dart';
@@ -49,7 +49,8 @@ class MyHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
     return super.createHttpClient(context)
-      ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+      ..badCertificateCallback =
+          (X509Certificate cert, String host, int port) => true;
   }
 }
 
@@ -58,44 +59,22 @@ class DramaTrackerAppWithSplash extends StatefulWidget {
   const DramaTrackerAppWithSplash({super.key});
 
   @override
-  State<DramaTrackerAppWithSplash> createState() => _DramaTrackerAppWithSplashState();
+  State<DramaTrackerAppWithSplash> createState() =>
+      _DramaTrackerAppWithSplashState();
 }
 
 class _DramaTrackerAppWithSplashState extends State<DramaTrackerAppWithSplash> {
-  bool _isInitialized = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeApp();
-  }
-
-  Future<void> _initializeApp() async {
-    // Show splash for minimum duration to display Lottie animation
-    await Future.delayed(const Duration(seconds: 2));
-
-    if (mounted) {
-      setState(() {
-        _isInitialized = true;
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (!_isInitialized) {
-      // Show splash screen during initialization
-      return const MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: SplashScreen(),
-      );
-    }
-
     // Wrap with ClerkAuth if using Convex Auth
     // Wrap with ClerkAuth
     return ClerkAuth(
       config: ClerkAuthConfig(
         publishableKey: dotenv.env['CLERK_PUBLISHABLE_KEY']!,
+        loading: const MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: SplashScreen(),
+        ),
       ),
       child: _ConvexTokenSync(
         child: const DramaTrackerApp(),
@@ -122,21 +101,21 @@ class _ConvexTokenSyncState extends State<_ConvexTokenSync> {
   }
 
   Future<void> _syncToken() async {
+    var wasSignedIn = false;
+
     try {
       final authState = ClerkAuth.of(context, listen: true);
-
-      // Inject ClerkAuthState into repository for use outside widget tree
-      ClerkAuthRepositoryImpl.setAuthState(authState);
-
-      if (authState.isSignedIn) {
-        // Get Convex-specific JWT token
-        final sessionToken = await authState.sessionToken(templateName: 'convex');
-        ConvexService.instance.setAuthToken(sessionToken.jwt);
-      } else {
-        ConvexService.instance.clearAuthToken();
+      wasSignedIn = authState.isSignedIn;
+      final isReady = await AuthBridge.ensureFromAuthState(authState);
+      if (isReady) {
+        await AuthBridge.syncProfileFromAuthState(authState);
       }
     } catch (e) {
-      debugPrint('⚠️ Error syncing Convex token: $e');
+      debugPrint(
+        '⚠️ Error syncing Convex token '
+        '(signedIn: $wasSignedIn): $e',
+      );
+      await ConvexService.instance.clearAuthToken();
     }
   }
 

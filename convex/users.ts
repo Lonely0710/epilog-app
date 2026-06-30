@@ -6,13 +6,17 @@ import { mutation, query } from "./_generated/server";
  */
 export const storeUser = mutation({
     args: {
-        name: v.string(),
+        name: v.optional(v.string()),
         avatarStorageId: v.optional(v.string()), // Storage ID from upload
     },
     handler: async (ctx, args) => {
         const identity = await ctx.auth.getUserIdentity();
         if (!identity) {
-            throw new Error("Called storeUser without authentication present");
+            return {
+                ok: false,
+                code: "UNAUTHENTICATED",
+                message: "Convex auth identity is missing.",
+            };
         }
 
         // Check if we have an existing user
@@ -35,11 +39,15 @@ export const storeUser = mutation({
         if (user !== null) {
             // Update existing user
             await ctx.db.patch(user._id, {
-                name: args.name,
+                ...(args.name ? { name: args.name } : {}),
                 // Only update avatar if a new one was provided, otherwise keep existing
                 ...(avatarUrl ? { avatarUrl } : {}),
             });
-            return user._id;
+            return {
+                ok: true,
+                userId: user._id,
+                avatarUrl: avatarUrl ?? user.avatarUrl,
+            };
         } else {
             // Create new user
             const newUserId = await ctx.db.insert("users", {
@@ -47,7 +55,11 @@ export const storeUser = mutation({
                 name: args.name,
                 avatarUrl: avatarUrl,
             });
-            return newUserId;
+            return {
+                ok: true,
+                userId: newUserId,
+                avatarUrl,
+            };
         }
     },
 });
@@ -60,9 +72,29 @@ export const generateUploadUrl = mutation({
     handler: async (ctx, args) => {
         const identity = await ctx.auth.getUserIdentity();
         if (!identity) {
-            throw new Error("Unauthenticated call to generateUploadUrl");
+            return null;
         }
         return await ctx.storage.generateUploadUrl();
+    },
+});
+
+/**
+ * Debug the auth identity Convex sees for the current request.
+ */
+export const authStatus = query({
+    args: {},
+    handler: async (ctx) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) {
+            return { isAuthenticated: false };
+        }
+
+        return {
+            isAuthenticated: true,
+            issuer: identity.issuer,
+            subject: identity.subject,
+            tokenIdentifier: identity.tokenIdentifier,
+        };
     },
 });
 
@@ -80,5 +112,47 @@ export const currentUser = query({
             .query("users")
             .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
             .unique();
+    },
+});
+
+/**
+ * Delete all app data owned by the current authenticated user.
+ */
+export const deleteCurrentUserData = mutation({
+    args: {},
+    handler: async (ctx) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) {
+            return {
+                ok: false,
+                code: "UNAUTHENTICATED",
+                message: "Convex auth identity is missing.",
+            };
+        }
+
+        const tokenIdentifier = identity.tokenIdentifier;
+        const collections = await ctx.db
+            .query("collections")
+            .withIndex("by_user", (q) => q.eq("userId", tokenIdentifier))
+            .collect();
+
+        for (const collection of collections) {
+            await ctx.db.delete(collection._id);
+        }
+
+        const user = await ctx.db
+            .query("users")
+            .withIndex("by_token", (q) => q.eq("tokenIdentifier", tokenIdentifier))
+            .unique();
+
+        if (user) {
+            await ctx.db.delete(user._id);
+        }
+
+        return {
+            ok: true,
+            deletedCollections: collections.length,
+            deletedUser: user !== null,
+        };
     },
 });

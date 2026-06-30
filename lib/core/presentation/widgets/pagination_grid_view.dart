@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:lottie/lottie.dart';
 
+import 'empty_state_widget.dart';
+
 class CorePaginationGridView<T> extends StatefulWidget {
   final List<T> items;
   final Widget Function(BuildContext context, int index, T item) itemBuilder;
@@ -14,6 +16,7 @@ class CorePaginationGridView<T> extends StatefulWidget {
   final double crossAxisSpacing;
   final EdgeInsetsGeometry padding;
   final Widget? emptyWidget;
+  final VoidCallback? onRefreshEmpty;
 
   const CorePaginationGridView({
     super.key,
@@ -28,10 +31,12 @@ class CorePaginationGridView<T> extends StatefulWidget {
     this.crossAxisSpacing = 10,
     this.padding = const EdgeInsets.all(16),
     this.emptyWidget,
+    this.onRefreshEmpty,
   });
 
   @override
-  State<CorePaginationGridView<T>> createState() => _CorePaginationGridViewState<T>();
+  State<CorePaginationGridView<T>> createState() =>
+      _CorePaginationGridViewState<T>();
 }
 
 class _CorePaginationGridViewState<T> extends State<CorePaginationGridView<T>> {
@@ -50,7 +55,8 @@ class _CorePaginationGridViewState<T> extends State<CorePaginationGridView<T>> {
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200 &&
+    if (_scrollController.position.pixels >=
+            _scrollController.position.maxScrollExtent - 200 &&
         !widget.isLoading &&
         widget.hasMore) {
       widget.onLoadMore();
@@ -61,18 +67,8 @@ class _CorePaginationGridViewState<T> extends State<CorePaginationGridView<T>> {
   Widget build(BuildContext context) {
     if (widget.items.isEmpty && !widget.isLoading) {
       return widget.emptyWidget ??
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.movie_filter_outlined, size: 64, color: Colors.grey[400]),
-                const SizedBox(height: 16),
-                Text(
-                  '暂无数据',
-                  style: TextStyle(color: Colors.grey[600]),
-                ),
-              ],
-            ),
+          EmptyStateWidget(
+            onAction: widget.onRefreshEmpty,
           );
     }
 
@@ -107,7 +103,8 @@ class _CorePaginationGridViewState<T> extends State<CorePaginationGridView<T>> {
                     columnCount: widget.crossAxisCount,
                     child: ScaleAnimation(
                       child: FadeInAnimation(
-                        child: widget.itemBuilder(context, index, widget.items[index]),
+                        child: widget.itemBuilder(
+                            context, index, widget.items[index]),
                       ),
                     ),
                   );
@@ -130,6 +127,9 @@ class _CorePaginationGridViewState<T> extends State<CorePaginationGridView<T>> {
   }
 
   Widget _buildFooter() {
+    final theme = Theme.of(context);
+    final bottomSafeArea = MediaQuery.of(context).padding.bottom;
+
     if (widget.isLoading) {
       return Lottie.asset(
         'assets/lottie/movie_loading.json',
@@ -138,40 +138,20 @@ class _CorePaginationGridViewState<T> extends State<CorePaginationGridView<T>> {
       );
     } else if (widget.hasMore) {
       return Padding(
-        padding: const EdgeInsets.only(bottom: 24.0),
+        padding: EdgeInsets.only(bottom: bottomSafeArea + 96),
         child: InkWell(
           onTap: widget.onLoadMore,
           borderRadius: BorderRadius.circular(30),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 8),
             decoration: BoxDecoration(
-              // Gradient for premium feel in dark mode, clean card color in light
-              gradient: Theme.of(context).brightness == Brightness.dark
-                  ? LinearGradient(
-                      colors: [
-                        Theme.of(context).primaryColor,
-                        Theme.of(context).primaryColor.withValues(alpha: 0.8),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    )
-                  : null,
-              color: Theme.of(context).brightness == Brightness.dark ? null : Theme.of(context).cardColor,
+              color: theme.primaryColor,
               borderRadius: BorderRadius.circular(30),
-              border: Border.all(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.white.withValues(alpha: 0.1) // Subtle frosting
-                    : Theme.of(context).primaryColor.withValues(alpha: 0.2),
-                width: 1.0,
-              ),
               boxShadow: [
                 BoxShadow(
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Theme.of(context).primaryColor.withValues(alpha: 0.3)
-                      : Theme.of(context).shadowColor.withValues(alpha: 0.05),
-                  blurRadius: 12, // Softer shadow
-                  offset: const Offset(0, 4),
-                  spreadRadius: Theme.of(context).brightness == Brightness.dark ? 1 : 0,
+                  color: theme.primaryColor.withValues(alpha: 0.24),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
                 ),
               ],
             ),
@@ -181,8 +161,7 @@ class _CorePaginationGridViewState<T> extends State<CorePaginationGridView<T>> {
                 Text(
                   '加载更多',
                   style: TextStyle(
-                    color:
-                        Theme.of(context).brightness == Brightness.dark ? Colors.white : Theme.of(context).primaryColor,
+                    color: Colors.white,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -190,8 +169,7 @@ class _CorePaginationGridViewState<T> extends State<CorePaginationGridView<T>> {
                 Icon(
                   Icons.arrow_downward_rounded,
                   size: 16,
-                  color:
-                      Theme.of(context).brightness == Brightness.dark ? Colors.white : Theme.of(context).primaryColor,
+                  color: Colors.white,
                 ),
               ],
             ),

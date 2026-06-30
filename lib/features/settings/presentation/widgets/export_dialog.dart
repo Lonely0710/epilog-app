@@ -5,7 +5,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../../app/theme/app_theme.dart';
+import '../../../../core/presentation/widgets/app_dialog.dart';
 import '../../../../core/presentation/widgets/app_snack_bar.dart';
+import '../../../../core/presentation/widgets/shared_dialog_button.dart';
 import '../../domain/services/export_service.dart';
 
 class ExportDialog extends StatefulWidget {
@@ -62,7 +64,8 @@ class _ExportDialogState extends State<ExportDialog> {
   void _showTypePicker(BuildContext context) {
     final types = _typeLabels.keys.toList();
     final initialIndex = types.indexOf(_selectedType);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final pickerBg = isDark ? const Color(0xFF1A2A3A) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black;
 
@@ -153,219 +156,172 @@ class _ExportDialogState extends State<ExportDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final dialogBg = Theme.of(context).cardColor;
-    final textColor =
-        Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black;
+    final theme = Theme.of(context);
 
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      backgroundColor: dialogBg,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Title
-            Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.file_upload_outlined,
-                    color: AppTheme.primary,
-                    size: 24,
-                  ),
-                  const SizedBox(width: 8),
-                  const Text(
-                    '数据导出',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.primary,
-                    ),
-                  ),
-                ],
-              ),
+    return AppDialog(
+      title: '数据导出',
+      contentAlignment: CrossAxisAlignment.start,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '选择要导出的收藏范围。',
+            style: TextStyle(
+              color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.72),
+              fontSize: 15,
+              height: 1.4,
+              letterSpacing: 0,
             ),
-            const SizedBox(height: 16),
-            // Divider
-            Container(
-              height: 1,
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.1)
-                  : Colors.grey.withValues(alpha: 0.2),
-            ),
-            const SizedBox(height: 20),
-
-            // Options
-            _buildRadioOption(
-              title: '导出全部',
-              value: true,
-            ),
-            _buildRadioOption(
-              title: '按类型导出',
-              value: false,
-            ),
-
-            // Partial Options Picker Trigger
-            AnimatedCrossFade(
-              firstChild: const SizedBox.shrink(),
-              secondChild: Padding(
-                padding: const EdgeInsets.only(left: 36.0, top: 4, right: 12),
-                child: GestureDetector(
-                  onTap: () => _showTypePicker(context),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.08)
-                          : Colors.grey[100],
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          _typeLabels[_selectedType] ?? '选择类型',
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: textColor,
-                            fontFamily: AppTheme.primaryFont,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        Icon(Icons.keyboard_arrow_down_rounded,
-                            color: isDark ? Colors.grey[400] : Colors.grey,
-                            size: 20),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              crossFadeState: _isExportAll
-                  ? CrossFadeState.showFirst
-                  : CrossFadeState.showSecond,
-              duration: const Duration(milliseconds: 300),
-            ),
-
-            const SizedBox(height: 28),
-
-            // Buttons
-            Row(
-              children: [
-                // Cancel Button
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          '取消',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.primary,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                // Export Button
-                Expanded(
-                  child: GestureDetector(
-                    onTap: _isExporting ? null : _handleExport,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primary,
-                        borderRadius: BorderRadius.circular(30),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.primary.withValues(alpha: 0.3),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Center(
-                        child: _isExporting
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text(
-                                '导出',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 16),
+          _buildExportOption(
+            title: '导出全部',
+            subtitle: '包含全部收藏数据',
+            value: true,
+          ),
+          const SizedBox(height: 8),
+          _buildExportOption(
+            title: '按类型导出',
+            subtitle: _typeLabels[_selectedType] ?? '选择类型',
+            value: false,
+            onTrailingTap: () => _showTypePicker(context),
+          ),
+        ],
+      ),
+      secondaryAction: AppDialogAction(
+        text: '取消',
+        variant: SharedDialogButtonVariant.secondary,
+        onPressed: _isExporting ? null : () => Navigator.pop(context),
+        isDisabled: _isExporting,
+      ),
+      primaryAction: AppDialogAction(
+        text: '导出',
+        onPressed: _isExporting ? null : _handleExport,
+        isLoading: _isExporting,
       ),
     );
   }
 
-  Widget _buildRadioOption({required String title, required bool value}) {
+  Widget _buildExportOption({
+    required String title,
+    required String subtitle,
+    required bool value,
+    VoidCallback? onTrailingTap,
+  }) {
     final isSelected = _isExportAll == value;
-    return GestureDetector(
-      onTap: () => setState(() => _isExportAll = value),
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8.0),
-        child: Row(
-          children: [
-            Container(
-              width: 20,
-              height: 20,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: isSelected ? AppTheme.primary : Colors.grey[400]!,
-                  width: 2,
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor = theme.textTheme.bodyLarge?.color ?? Colors.black;
+    final mutedColor = theme.textTheme.bodyMedium?.color ?? Colors.grey;
+    const selectedColor = AppTheme.primary;
+
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      child: GestureDetector(
+        onTap: () => setState(() => _isExportAll = value),
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? selectedColor.withValues(alpha: isDark ? 0.16 : 0.10)
+                : (isDark
+                    ? Colors.white.withValues(alpha: 0.07)
+                    : Colors.white.withValues(alpha: 0.54)),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: isSelected
+                  ? selectedColor.withValues(alpha: isDark ? 0.42 : 0.28)
+                  : (isDark
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : Colors.black.withValues(alpha: 0.05)),
+            ),
+          ),
+          child: Row(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isSelected ? selectedColor : Colors.transparent,
+                  border: Border.all(
+                    color: isSelected
+                        ? selectedColor
+                        : mutedColor.withValues(alpha: 0.32),
+                    width: 2,
+                  ),
+                ),
+                child: isSelected
+                    ? const Icon(
+                        Icons.check_rounded,
+                        color: Colors.white,
+                        size: 15,
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        height: 1.3,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: mutedColor.withValues(alpha: 0.72),
+                        fontSize: 13,
+                        height: 1.35,
+                        letterSpacing: 0,
+                        fontFamily: AppTheme.primaryFont,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: isSelected
-                  ? Center(
-                      child: Container(
-                        width: 10,
-                        height: 10,
-                        decoration: const BoxDecoration(
-                            shape: BoxShape.circle, color: AppTheme.primary),
-                      ),
-                    )
-                  : null,
-            ),
-            const SizedBox(width: 12),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 16,
-                color: Theme.of(context).textTheme.bodyLarge?.color,
-              ),
-            ),
-          ],
+              if (onTrailingTap != null) ...[
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () {
+                    setState(() => _isExportAll = value);
+                    onTrailingTap();
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    constraints: const BoxConstraints(
+                      minWidth: 44,
+                      minHeight: 44,
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.chevron_right_rounded,
+                      color: isSelected
+                          ? selectedColor
+                          : mutedColor.withValues(alpha: 0.56),
+                      size: 24,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );

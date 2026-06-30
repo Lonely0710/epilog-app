@@ -66,7 +66,7 @@ class QuickLinkGrid extends StatelessWidget {
                     '/webview',
                     extra: WebBrowserPageArgs.fromSiteType(
                       siteType: SiteType.bangumi,
-                      url: 'https://bgm.tv',
+                      url: 'https://bangumi.tv',
                     ),
                   ),
                 ),

@@ -14,14 +14,6 @@ class DramaTrackerApp extends ConsumerStatefulWidget {
 
 class _DramaTrackerAppState extends ConsumerState<DramaTrackerApp> {
   @override
-  void initState() {
-    super.initState();
-
-    // Only listen to Supabase auth changes if NOT using Convex/Clerk auth
-    // Supabase auth listener removed (migrated to Convex/Clerk)
-  }
-
-  @override
   Widget build(BuildContext context) {
     final goRouter = ref.watch(appRouterProvider);
 

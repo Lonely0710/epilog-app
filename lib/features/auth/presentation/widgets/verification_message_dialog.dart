@@ -29,7 +29,7 @@ class VerificationMessageDialog extends StatelessWidget {
     final primaryColor =
         _isSuccess ? AppTheme.primary : const Color(0xFFD32F2F);
     final iconData = _isSuccess ? Icons.check_rounded : Icons.close_rounded;
-    final title = _isSuccess ? 'Congratulations!' : 'Verification Failed';
+    final title = _isSuccess ? '验证成功' : '验证失败';
 
     return Dialog(
       shape: RoundedRectangleBorder(
@@ -138,7 +138,7 @@ class VerificationMessageDialog extends StatelessWidget {
                     onDismiss?.call();
                   },
                   child: const Text(
-                    "Continue",
+                    "继续",
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -164,7 +164,7 @@ class VerificationMessageDialog extends StatelessWidget {
                     onDismiss?.call();
                   },
                   child: const Text(
-                    "Try Again",
+                    "重试",
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,

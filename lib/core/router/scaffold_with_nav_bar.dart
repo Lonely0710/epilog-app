@@ -1,9 +1,9 @@
+import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
-import '../../app/theme/app_colors.dart';
 import '../presentation/widgets/shared_app_bar.dart';
 
 /// InheritedWidget to provide nav visibility control to child widgets
@@ -23,12 +23,14 @@ class NavVisibilityController extends InheritedWidget {
   });
 
   static NavVisibilityController? of(BuildContext context) {
-    return context.dependOnInheritedWidgetOfExactType<NavVisibilityController>();
+    return context
+        .dependOnInheritedWidgetOfExactType<NavVisibilityController>();
   }
 
   @override
   bool updateShouldNotify(NavVisibilityController oldWidget) {
-    return isNavVisible != oldWidget.isNavVisible || currentIndex != oldWidget.currentIndex;
+    return isNavVisible != oldWidget.isNavVisible ||
+        currentIndex != oldWidget.currentIndex;
   }
 }
 
@@ -42,7 +44,8 @@ class ScaffoldWithNavBar extends StatefulWidget {
   State<ScaffoldWithNavBar> createState() => _ScaffoldWithNavBarState();
 }
 
-class _ScaffoldWithNavBarState extends State<ScaffoldWithNavBar> with TickerProviderStateMixin {
+class _ScaffoldWithNavBarState extends State<ScaffoldWithNavBar>
+    with TickerProviderStateMixin {
   bool _isNavVisible = true;
   late AnimationController _visibilityController;
   late Animation<double> _fadeAnimation;
@@ -52,6 +55,9 @@ class _ScaffoldWithNavBarState extends State<ScaffoldWithNavBar> with TickerProv
   late AnimationController _tabAnimationController;
   late Animation<double> _tabAnimation;
   int _previousIndex = 0;
+
+  late AnimationController _appBarVisibilityController;
+  late Animation<double> _appBarVisibilityAnimation;
 
   // Drag state
   double? _dragValue;
@@ -92,6 +98,16 @@ class _ScaffoldWithNavBarState extends State<ScaffoldWithNavBar> with TickerProv
     );
     _tabAnimationController.value = 1.0; // Start completed
 
+    _appBarVisibilityController = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+      value: widget.navigationShell.currentIndex == 2 ? 0.0 : 1.0,
+    );
+    _appBarVisibilityAnimation = CurvedAnimation(
+      parent: _appBarVisibilityController,
+      curve: Curves.fastOutSlowIn,
+    );
+
     // Start with nav visible
     _visibilityController.value = 0;
     _previousIndex = widget.navigationShell.currentIndex;
@@ -101,6 +117,7 @@ class _ScaffoldWithNavBarState extends State<ScaffoldWithNavBar> with TickerProv
   void dispose() {
     _visibilityController.dispose();
     _tabAnimationController.dispose();
+    _appBarVisibilityController.dispose();
     super.dispose();
   }
 
@@ -136,7 +153,14 @@ class _ScaffoldWithNavBarState extends State<ScaffoldWithNavBar> with TickerProv
     super.didUpdateWidget(oldWidget);
 
     // Animate tab change
-    if (oldWidget.navigationShell.currentIndex != widget.navigationShell.currentIndex) {
+    if (oldWidget.navigationShell.currentIndex !=
+        widget.navigationShell.currentIndex) {
+      if (_isLibraryPage) {
+        _appBarVisibilityController.reverse();
+      } else {
+        _appBarVisibilityController.forward();
+      }
+
       // If we have a stored drag end position, animate from there
       // The _dragEndPosition will be cleared in AnimatedBuilder after animation completes
       if (_dragEndPosition != null) {
@@ -158,7 +182,9 @@ class _ScaffoldWithNavBarState extends State<ScaffoldWithNavBar> with TickerProv
     }
     // When entering Library, ensure nav is visible initially (reset state)
     // User will manually trigger full screen via light cord interactions
-    if (_isLibraryPage && oldWidget.navigationShell.currentIndex != 2 && !_isNavVisible) {
+    if (_isLibraryPage &&
+        oldWidget.navigationShell.currentIndex != 2 &&
+        !_isNavVisible) {
       _setNavVisibility(true);
     }
   }
@@ -167,31 +193,60 @@ class _ScaffoldWithNavBarState extends State<ScaffoldWithNavBar> with TickerProv
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
-    return NavVisibilityController(
-      toggleNavVisibility: _toggleNavVisibility,
-      setNavVisibility: _setNavVisibility,
-      isNavVisible: _isNavVisible,
-      currentIndex: widget.navigationShell.currentIndex,
-      child: Scaffold(
-        // Hide app bar for Library page (immersive mode)
-        // Adjust title for 'Hot'
-        appBar: _isLibraryPage
-            ? null
-            : SharedAppBar(
-                title: _getTitle(widget.navigationShell.currentIndex),
-                showAvatar: widget.navigationShell.currentIndex == 0 || widget.navigationShell.currentIndex == 1,
+    return AnimatedBuilder(
+      animation: _appBarVisibilityAnimation,
+      builder: (context, child) {
+        final appBarVisibleValue =
+            _isLibraryPage ? 0.0 : _appBarVisibilityAnimation.value;
+        final appBarHeight = kToolbarHeight * appBarVisibleValue;
+
+        return NavVisibilityController(
+          toggleNavVisibility: _toggleNavVisibility,
+          setNavVisibility: _setNavVisibility,
+          isNavVisible: _isNavVisible,
+          currentIndex: widget.navigationShell.currentIndex,
+          child: Scaffold(
+            appBar: PreferredSize(
+              preferredSize: Size.fromHeight(appBarHeight),
+              child: ClipRect(
+                child: Align(
+                  heightFactor: appBarVisibleValue,
+                  alignment: Alignment.topCenter,
+                  child: IgnorePointer(
+                    ignoring: appBarVisibleValue < 1,
+                    child: Opacity(
+                      opacity: appBarVisibleValue,
+                      child: _isLibraryPage
+                          ? const SizedBox.shrink()
+                          : SharedAppBar(
+                              title: _getTitle(
+                                  widget.navigationShell.currentIndex),
+                              showAvatar:
+                                  widget.navigationShell.currentIndex == 0 ||
+                                      widget.navigationShell.currentIndex == 1,
+                            ),
+                    ),
+                  ),
+                ),
               ),
-        body: widget.navigationShell,
-        // Animated bottom navigation for immersive mode
-        bottomNavigationBar: SlideTransition(
-          position: _slideAnimation,
-          child: FadeTransition(
-            opacity: ReverseAnimation(_fadeAnimation),
-            child: _buildBottomNavBar(context, bottomPadding),
+            ),
+            body: MediaQuery.removePadding(
+              context: context,
+              removeBottom: true,
+              child: widget.navigationShell,
+            ),
+            // Animated bottom navigation for immersive mode
+            bottomNavigationBar: SlideTransition(
+              position: _slideAnimation,
+              child: FadeTransition(
+                opacity: ReverseAnimation(_fadeAnimation),
+                child: _buildBottomNavBar(context, bottomPadding),
+              ),
+            ),
+            extendBody: true,
           ),
-        ),
-        extendBody: true,
-      ),
+        );
+      },
     );
   }
 
@@ -199,260 +254,320 @@ class _ScaffoldWithNavBarState extends State<ScaffoldWithNavBar> with TickerProv
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentIndex = widget.navigationShell.currentIndex;
     const itemsCount = 4;
+    const barHeight = 66.0;
+    const barRadius = 33.0;
+    const selectedPillInset = 5.0;
+    const selectedPillHorizontalInset = 5.0;
+    const selectedPillRadius = barRadius - selectedPillInset;
 
-    return Container(
+    return Padding(
       padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        bottom: bottomPadding + 16,
+        left: 28,
+        right: 28,
+        bottom: bottomPadding + 12,
       ),
       child: Container(
-        height: 64,
+        height: barHeight,
         decoration: BoxDecoration(
-          color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey[100],
-          borderRadius: BorderRadius.circular(32),
-          boxShadow: isDark
-              ? null
-              : [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
+          borderRadius: BorderRadius.circular(barRadius),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.32 : 0.10),
+              blurRadius: isDark ? 26 : 30,
+              spreadRadius: -12,
+              offset: const Offset(0, 16),
+            ),
+          ],
         ),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final availableWidth = constraints.maxWidth;
+        child: LiquidGlassLayer(
+          settings: LiquidGlassSettings(
+            refractiveIndex: 1.24,
+            thickness: isDark ? 34 : 40,
+            blur: isDark ? 10 : 12,
+            saturation: isDark ? 1.18 : 1.38,
+            chromaticAberration: 0.012,
+            lightAngle: -math.pi / 4,
+            lightIntensity: isDark ? 0.74 : 0.92,
+            ambientStrength: isDark ? 0.16 : 0.26,
+            glassColor: Colors.white.withValues(alpha: isDark ? 0.05 : 0.10),
+          ),
+          child: LiquidGlassBlendGroup(
+            blend: 12,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(barRadius),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final availableWidth = constraints.maxWidth;
 
-            // Revert flex values to previous logic for simplicity and stability if needed,
-            // but user wants smooth sliding.
-            const selectedFlex = 2.0;
-            const unselectedFlex = 1.0;
+                  const selectedFlex = 1.75;
+                  const unselectedFlex = 1.0;
 
-            // Geometry helper calculating layout for a fractional index
-            // We use a Record (dart 3) to return values
-            ({double pillLeft, double pillWidth, List<double> itemLefts, List<double> itemWidths}) calculateLayout(
-                double fractionalIndex) {
-              // 1. Calculate weights for each item
-              // Weight is interpolated between unselected (1.0) and selected (2.0)
-              // based on distance from fractionalIndex
-              final weights = List.generate(itemsCount, (i) {
-                final distance = (fractionalIndex - i).abs();
-                // If distance is 0 (selected), weight is 2.0
-                // If distance is >= 1 (unselected), weight is 1.0
-                final t = (1.0 - distance).clamp(0.0, 1.0);
-                // Standard linear interpolation
-                return lerpDouble(unselectedFlex, selectedFlex, t)!;
-              });
+                  ({
+                    double pillLeft,
+                    double pillWidth,
+                    List<double> itemLefts,
+                    List<double> itemWidths
+                  }) calculateLayout(double fractionalIndex) {
+                    final weights = List.generate(itemsCount, (i) {
+                      final distance = (fractionalIndex - i).abs();
+                      final t = (1.0 - distance).clamp(0.0, 1.0);
+                      return lerpDouble(unselectedFlex, selectedFlex, t)!;
+                    });
 
-              final totalWeight = weights.reduce((a, b) => a + b);
-              final unitWidth = availableWidth / totalWeight;
+                    final totalWeight = weights.reduce((a, b) => a + b);
+                    final unitWidth = availableWidth / totalWeight;
 
-              final itemWidths = weights.map((w) => w * unitWidth).toList();
-              final itemLefts = <double>[];
-              double currentLeft = 0;
-              for (final w in itemWidths) {
-                itemLefts.add(currentLeft);
-                currentLeft += w;
-              }
-
-              // Calculate pill geometry
-              // The pill should be positioned corresponding to the fractional index.
-              // We interpolate between the geometries of the floor(index) and ceil(index).
-              final lowerIndex = fractionalIndex.floor().clamp(0, itemsCount - 1);
-              final upperIndex = (lowerIndex + 1).clamp(0, itemsCount - 1);
-              final t = fractionalIndex - lowerIndex;
-
-              final lowerLeft = itemLefts[lowerIndex];
-              final lowerWidth = itemWidths[lowerIndex];
-
-              final upperLeft = itemLefts[upperIndex];
-              final upperWidth = itemWidths[upperIndex];
-
-              final pillLeft = lerpDouble(lowerLeft, upperLeft, t)!;
-              final pillWidth = lerpDouble(lowerWidth, upperWidth, t)!;
-
-              return (
-                pillLeft: pillLeft,
-                pillWidth: pillWidth,
-                itemLefts: itemLefts,
-                itemWidths: itemWidths,
-              );
-            }
-
-            return GestureDetector(
-              behavior: HitTestBehavior.opaque, // Ensure we catch drags
-              onHorizontalDragStart: (details) {
-                setState(() {
-                  _dragValue = currentIndex.toDouble();
-                });
-              },
-              onHorizontalDragUpdate: (details) {
-                if (_dragValue == null) return;
-                // Sensitivity calculation
-                // Total width = availableWidth
-                // Total indices = itemsCount - 1 (range 0..3)
-                // Let's say dragging full width moves across all tabs?
-                // Or dragging one "tab width" moves one tab.
-                // Avg tab width is availableWidth / 4.
-                // So delta / (availableWidth/4) = deltaIndex.
-                final deltaIndex = details.primaryDelta! / (availableWidth / itemsCount);
-                setState(() {
-                  _dragValue = (_dragValue! + deltaIndex).clamp(0.0, itemsCount - 1 + 0.0);
-                });
-              },
-              onHorizontalDragEnd: (details) {
-                if (_dragValue == null) return;
-
-                final velocity = details.primaryVelocity ?? 0;
-                int targetIndex = _dragValue!.round();
-
-                // Flick support
-                if (velocity.abs() > 300) {
-                  if (velocity > 0) {
-                    // Flick right
-                    targetIndex = _dragValue!.floor() + 1;
-                  } else {
-                    // Flick left
-                    targetIndex = _dragValue!.ceil() - 1;
-                  }
-                }
-
-                targetIndex = targetIndex.clamp(0, itemsCount - 1);
-
-                // Store the current drag position before clearing
-                // This will be used as the animation start point
-                final dragEndPos = _dragValue!;
-
-                setState(() {
-                  _dragEndPosition = dragEndPos;
-                  _dragValue = null;
-                });
-                _onTap(context, targetIndex);
-              },
-              onHorizontalDragCancel: () {
-                setState(() {
-                  _dragValue = null;
-                });
-              },
-              child: AnimatedBuilder(
-                animation: _tabAnimation,
-                builder: (context, child) {
-                  // Determine the driving value for the layout
-                  // If dragging, use _dragValue
-                  // If animating after drag, interpolate from drag end position to target
-                  // Otherwise, interpolate between _previousIndex and currentIndex
-                  double drivingValue;
-                  if (_dragValue != null) {
-                    drivingValue = _dragValue!;
-                  } else if (_dragEndPosition != null) {
-                    // Animate from the exact drag end position to the target
-                    drivingValue = lerpDouble(
-                      _dragEndPosition!,
-                      currentIndex.toDouble(),
-                      _tabAnimation.value,
-                    )!;
-                    // Clear the drag end position once animation completes
-                    if (_tabAnimation.value >= 1.0) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (mounted) {
-                          setState(() {
-                            _dragEndPosition = null;
-                          });
-                        }
-                      });
+                    final itemWidths =
+                        weights.map((w) => w * unitWidth).toList();
+                    final itemLefts = <double>[];
+                    double currentLeft = 0;
+                    for (final w in itemWidths) {
+                      itemLefts.add(currentLeft);
+                      currentLeft += w;
                     }
-                  } else {
-                    drivingValue = lerpDouble(
-                      _previousIndex.toDouble(),
-                      currentIndex.toDouble(),
-                      _tabAnimation.value,
-                    )!;
+
+                    final lowerIndex =
+                        fractionalIndex.floor().clamp(0, itemsCount - 1);
+                    final upperIndex =
+                        (lowerIndex + 1).clamp(0, itemsCount - 1);
+                    final t = fractionalIndex - lowerIndex;
+
+                    final lowerLeft = itemLefts[lowerIndex];
+                    final lowerWidth = itemWidths[lowerIndex];
+
+                    final upperLeft = itemLefts[upperIndex];
+                    final upperWidth = itemWidths[upperIndex];
+
+                    final pillLeft = lerpDouble(lowerLeft, upperLeft, t)!;
+                    final pillWidth = lerpDouble(lowerWidth, upperWidth, t)!;
+
+                    return (
+                      pillLeft: pillLeft,
+                      pillWidth: pillWidth,
+                      itemLefts: itemLefts,
+                      itemWidths: itemWidths,
+                    );
                   }
 
-                  final layout = calculateLayout(drivingValue);
+                  return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onHorizontalDragStart: (details) {
+                      setState(() {
+                        _dragValue = currentIndex.toDouble();
+                      });
+                    },
+                    onHorizontalDragUpdate: (details) {
+                      if (_dragValue == null) return;
+                      final deltaIndex =
+                          details.primaryDelta! / (availableWidth / itemsCount);
+                      setState(() {
+                        _dragValue = (_dragValue! + deltaIndex)
+                            .clamp(0.0, itemsCount - 1 + 0.0);
+                      });
+                    },
+                    onHorizontalDragEnd: (details) {
+                      if (_dragValue == null) return;
 
-                  return Stack(
-                    children: [
-                      // Liquid Glass Selection Indicator
-                      Positioned(
-                        left: layout.pillLeft,
-                        top: 0,
-                        bottom: 0,
-                        width: layout.pillWidth,
-                        child: Padding(
-                          padding: const EdgeInsets.all(4.0),
-                          child: LiquidGlassLayer(
-                            settings: LiquidGlassSettings(
-                              thickness: isDark ? 15 : 10,
-                              blur: isDark ? 0 : 2,
-                              glassColor: isDark ? const Color(0x22FFFFFF) : Colors.white.withValues(alpha: 0.4),
-                            ),
-                            child: FakeGlass(
-                              shape: LiquidRoundedSuperellipse(
-                                borderRadius: 24,
+                      final velocity = details.primaryVelocity ?? 0;
+                      int targetIndex = _dragValue!.round();
+
+                      if (velocity.abs() > 300) {
+                        if (velocity > 0) {
+                          targetIndex = _dragValue!.floor() + 1;
+                        } else {
+                          targetIndex = _dragValue!.ceil() - 1;
+                        }
+                      }
+
+                      targetIndex = targetIndex.clamp(0, itemsCount - 1);
+
+                      final dragEndPos = _dragValue!;
+
+                      setState(() {
+                        _dragEndPosition = dragEndPos;
+                        _dragValue = null;
+                      });
+                      _onTap(context, targetIndex);
+                    },
+                    onHorizontalDragCancel: () {
+                      setState(() {
+                        _dragValue = null;
+                      });
+                    },
+                    child: AnimatedBuilder(
+                      animation: _tabAnimation,
+                      builder: (context, child) {
+                        double drivingValue;
+                        if (_dragValue != null) {
+                          drivingValue = _dragValue!;
+                        } else if (_dragEndPosition != null) {
+                          drivingValue = lerpDouble(
+                            _dragEndPosition!,
+                            currentIndex.toDouble(),
+                            _tabAnimation.value,
+                          )!;
+                          if (_tabAnimation.value >= 1.0) {
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (mounted) {
+                                setState(() {
+                                  _dragEndPosition = null;
+                                });
+                              }
+                            });
+                          }
+                        } else {
+                          drivingValue = lerpDouble(
+                            _previousIndex.toDouble(),
+                            currentIndex.toDouble(),
+                            _tabAnimation.value,
+                          )!;
+                        }
+
+                        final layout = calculateLayout(drivingValue);
+
+                        return Stack(
+                          children: [
+                            Positioned.fill(
+                              child: LiquidGlass.grouped(
+                                clipBehavior: Clip.antiAlias,
+                                shape: LiquidRoundedSuperellipse(
+                                  borderRadius: barRadius,
+                                ),
+                                child: _buildGlassBarTint(isDark),
                               ),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: isDark ? AppColors.primary.withValues(alpha: 0.85) : AppColors.primary,
-                                  borderRadius: BorderRadius.circular(24),
-                                  border: Border.all(
-                                    color: isDark
-                                        ? Colors.white.withValues(alpha: 0.3)
-                                        : Colors.white.withValues(alpha: 0.4),
-                                    width: 1.5,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppColors.primary.withValues(alpha: 0.3),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
+                            ),
+                            Positioned(
+                              left:
+                                  layout.pillLeft + selectedPillHorizontalInset,
+                              top: selectedPillInset,
+                              bottom: selectedPillInset,
+                              width: layout.pillWidth -
+                                  selectedPillHorizontalInset * 2,
+                              child: LiquidGlass.grouped(
+                                clipBehavior: Clip.antiAlias,
+                                shape: LiquidRoundedSuperellipse(
+                                  borderRadius: selectedPillRadius,
+                                ),
+                                child: _buildSelectedGlassPillTint(
+                                  isDark,
+                                  selectedPillRadius,
                                 ),
                               ),
                             ),
-                          ),
-                        ),
-                      ),
-                      // Tab Items
-                      ...List.generate(itemsCount, (index) {
-                        final left = layout.itemLefts[index];
-                        final width = layout.itemWidths[index];
+                            ...List.generate(itemsCount, (index) {
+                              final left = layout.itemLefts[index];
+                              final width = layout.itemWidths[index];
 
-                        // Text opacity logic based on drivingValue
-                        // 1.0 when index == drivingValue, 0.0 when |index - drivingValue| >= 1
-                        final distance = (drivingValue - index).abs();
-                        double textOpacity = (1.0 - distance).clamp(0.0, 1.0);
-                        textOpacity = Curves.easeOut.transform(textOpacity);
-
-                        return Positioned(
-                          left: left,
-                          top: 0,
-                          bottom: 0,
-                          width: width,
-                          child: _buildTabItem(
-                            context,
-                            index: index,
-                            activeIcon: _getActiveIcon(index),
-                            inactiveIcon: _getInactiveIcon(index),
-                            label: _getLabel(index),
-                            // Visually selected if closest
-                            isSelected: index == drivingValue.round(),
-                            isDark: isDark,
-                            textOpacity: textOpacity,
-                          ),
+                              return Positioned(
+                                left: left,
+                                top: 0,
+                                bottom: 0,
+                                width: width,
+                                child: _buildTabItem(
+                                  context,
+                                  index: index,
+                                  activeIcon: _getActiveIcon(index),
+                                  inactiveIcon: _getInactiveIcon(index),
+                                  label: _getLabel(index),
+                                  isSelected: index == drivingValue.round(),
+                                  isDark: isDark,
+                                ),
+                              );
+                            }),
+                          ],
                         );
-                      }),
-                    ],
+                      },
+                    ),
                   );
                 },
               ),
-            );
-          },
+            ),
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildGlassBarTint(bool isDark) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(33),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.11)
+              : Colors.white.withValues(alpha: 0.62),
+          width: isDark ? 1.0 : 1.1,
+        ),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          stops: const [0, 0.42, 1],
+          colors: [
+            Colors.white.withValues(alpha: isDark ? 0.045 : 0.18),
+            (isDark ? Colors.black : Colors.white)
+                .withValues(alpha: isDark ? 0.14 : 0.22),
+            Colors.white.withValues(alpha: isDark ? 0.025 : 0.12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSelectedGlassPillTint(bool isDark, double borderRadius) {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(borderRadius),
+              gradient: RadialGradient(
+                center: const Alignment(-0.28, -0.30),
+                radius: 1.05,
+                stops: const [0.0, 0.64, 1.0],
+                colors: isDark
+                    ? [
+                        Colors.white.withValues(alpha: 0.16),
+                        Colors.white.withValues(alpha: 0.065),
+                        Colors.white.withValues(alpha: 0.03),
+                      ]
+                    : [
+                        Colors.white.withValues(alpha: 0.24),
+                        const Color(0xFFDDE7F3).withValues(alpha: 0.10),
+                        const Color(0xFF9EADBF).withValues(alpha: 0.05),
+                      ],
+              ),
+            ),
+          ),
+        ),
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(borderRadius),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                stops: const [0.0, 0.36, 1.0],
+                colors: [
+                  Colors.white.withValues(alpha: isDark ? 0.10 : 0.18),
+                  Colors.white.withValues(alpha: isDark ? 0.03 : 0.055),
+                  Colors.white.withValues(alpha: isDark ? 0.01 : 0.018),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(borderRadius),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: isDark ? 0.12 : 0.18),
+                width: 0.8,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -509,48 +624,33 @@ class _ScaffoldWithNavBarState extends State<ScaffoldWithNavBar> with TickerProv
     required String label,
     required bool isSelected,
     required bool isDark,
-    required double textOpacity,
   }) {
-    final inactiveColor = isDark ? Colors.grey[400]! : Colors.grey;
+    final activeColor = isDark ? Colors.white : const Color(0xFF070B12);
+    final inactiveColor = isDark
+        ? Colors.white.withValues(alpha: 0.88)
+        : const Color(0xFF070B12).withValues(alpha: 0.92);
 
     return GestureDetector(
       onTap: () => _onTap(context, index),
       behavior: HitTestBehavior.translucent,
-      child: Center(
-        // Use Center instead of Column
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isSelected ? activeIcon : inactiveIcon,
-              // Increased icon sizes: Active 32, Inactive 28
-              size: isSelected ? 32 : 28,
-              color: isSelected ? Colors.white : inactiveColor,
-            ),
-            if (textOpacity > 0.01) ...[
-              SizedBox(width: 8 * textOpacity),
-              Opacity(
-                opacity: textOpacity,
-                child: ClipRect(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    widthFactor: textOpacity,
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.clip,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
+      child: Semantics(
+        button: true,
+        selected: isSelected,
+        label: label,
+        child: Tooltip(
+          message: label,
+          child: Center(
+            child: AnimatedScale(
+              scale: isSelected ? 1.08 : 1.0,
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOutCubic,
+              child: Icon(
+                isSelected ? activeIcon : inactiveIcon,
+                size: 32,
+                color: isSelected ? activeColor : inactiveColor,
               ),
-            ],
-          ],
+            ),
+          ),
         ),
       ),
     );

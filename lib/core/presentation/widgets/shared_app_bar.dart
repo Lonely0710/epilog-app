@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../services/auth_bridge.dart';
+import '../../services/avatar_preview_service.dart';
 import '../../../features/auth/data/convex_user_repository.dart';
 
 class SharedAppBar extends StatefulWidget implements PreferredSizeWidget {
@@ -48,40 +51,21 @@ class _SharedAppBarState extends State<SharedAppBar> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Get Clerk Auth state for fallback and auth status
-    final authState = ClerkAuth.of(context, listen: true);
-    final clerkUser = authState.user;
-    final clerkAvatarUrl = clerkUser?.imageUrl;
-
     return StreamBuilder<Map<String, dynamic>?>(
       stream: widget.showAvatar ? _userStream : null,
       builder: (context, snapshot) {
         final convexUser = snapshot.data;
-        final convexAvatarUrl = convexUser?['avatarUrl'] as String?;
-
-        // Prioritize Convex avatar, then Clerk avatar
-        final avatarUrl = convexAvatarUrl ?? clerkAvatarUrl;
+        final avatarUrl = AuthBridge.avatarUrl(convexUser);
 
         return AppBar(
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           elevation: 0,
           centerTitle: true,
-          leadingWidth: 56, // Adjust if needed
-          leading: Padding(
-            padding: const EdgeInsets.only(left: 16.0),
-            child: Image.asset(
-              'assets/icons/ic_badge.png',
-              fit: BoxFit.contain,
-            ),
-          ),
-          title: Text(
-            widget.title,
-            style: TextStyle(
-              color: isDark ? Colors.white : Colors.black,
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              fontFamily: 'Pacifico',
-            ),
+          leadingWidth: 56,
+          leading: const SizedBox(width: 56),
+          title: _BeamTitle(
+            title: widget.title,
+            color: isDark ? Colors.white : Colors.black,
           ),
           actions: [
             if (widget.showAvatar)
@@ -101,8 +85,18 @@ class _SharedAppBarState extends State<SharedAppBar> {
                     ),
                   ),
                   child: ClipOval(
-                    child: avatarUrl != null
-                        ? CachedNetworkImage(
+                    child: ValueListenableBuilder<File?>(
+                      valueListenable:
+                          AvatarPreviewService.instance.localAvatar,
+                      builder: (context, localAvatar, child) {
+                        if (localAvatar != null) {
+                          return Image.file(
+                            localAvatar,
+                            fit: BoxFit.cover,
+                          );
+                        }
+                        if (avatarUrl != null) {
+                          return CachedNetworkImage(
                             imageUrl: avatarUrl,
                             fit: BoxFit.cover,
                             placeholder: (context, url) => Container(
@@ -112,11 +106,14 @@ class _SharedAppBarState extends State<SharedAppBar> {
                               Icons.person,
                               color: Colors.grey,
                             ),
-                          )
-                        : const Icon(
-                            Icons.person,
-                            color: Colors.grey,
-                          ),
+                          );
+                        }
+                        return const Icon(
+                          Icons.person,
+                          color: Colors.grey,
+                        );
+                      },
+                    ),
                   ),
                 ),
               )
@@ -125,6 +122,84 @@ class _SharedAppBarState extends State<SharedAppBar> {
           ],
         );
       },
+    );
+  }
+}
+
+class _BeamTitle extends StatelessWidget {
+  final String title;
+  final Color color;
+
+  const _BeamTitle({
+    required this.title,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 38,
+      child: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            top: 7,
+            left: 18,
+            child: Transform.rotate(
+              angle: -0.1,
+              child: Container(
+                width: 48,
+                height: 13,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  color: const Color(0xFFFFE66D).withValues(alpha: 0.68),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFFE66D).withValues(alpha: 0.36),
+                      blurRadius: 10,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 10,
+            right: 14,
+            child: Transform.rotate(
+              angle: -0.1,
+              child: Container(
+                width: 46,
+                height: 12,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  color: const Color(0xFF7A6CFF).withValues(alpha: 0.38),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF7A6CFF).withValues(alpha: 0.28),
+                      blurRadius: 10,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Text(
+            title,
+            style: TextStyle(
+              color: color,
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              fontFamily: 'Pacifico',
+              height: 1.0,
+              letterSpacing: 0,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

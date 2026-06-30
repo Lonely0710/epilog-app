@@ -5,11 +5,13 @@ import 'package:flutter/material.dart';
 class AnimatedBranchContainer extends StatefulWidget {
   final int currentIndex;
   final List<Widget> children;
+  final Set<int> instantSwitchIndices;
 
   const AnimatedBranchContainer({
     super.key,
     required this.currentIndex,
     required this.children,
+    this.instantSwitchIndices = const {},
   });
 
   @override
@@ -55,8 +57,18 @@ class _AnimatedBranchContainerState extends State<AnimatedBranchContainer>
     super.didUpdateWidget(oldWidget);
 
     if (widget.currentIndex != oldWidget.currentIndex) {
-      _faders[oldWidget.currentIndex].reverse();
-      _faders[widget.currentIndex].forward();
+      final shouldSwitchInstantly =
+          widget.instantSwitchIndices.contains(oldWidget.currentIndex) ||
+              widget.instantSwitchIndices.contains(widget.currentIndex);
+
+      if (shouldSwitchInstantly) {
+        for (var i = 0; i < _faders.length; i++) {
+          _faders[i].value = i == widget.currentIndex ? 1.0 : 0.0;
+        }
+      } else {
+        _faders[oldWidget.currentIndex].reverse();
+        _faders[widget.currentIndex].forward();
+      }
     }
 
     // Handle children count change if necessary (unlikely for fixed tabs)

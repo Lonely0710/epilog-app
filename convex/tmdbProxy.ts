@@ -16,10 +16,9 @@ export const proxy = action({
         }
 
         const TMDB_BASE_URL = "https://api.themoviedb.org/3";
-        let targetUrl = `${TMDB_BASE_URL}${args.path}`;
+        const targetUrlObject = new URL(`${TMDB_BASE_URL}${args.path}`);
 
         if (args.query) {
-            const searchParams = new URLSearchParams();
             let queryObj = args.query;
 
             // Handle case where query is passed as a string (JSON)
@@ -42,20 +41,16 @@ export const proxy = action({
 
             for (const [key, value] of Object.entries(queryObj)) {
                 if (value !== undefined && value !== null) {
-                    searchParams.append(key, String(value));
+                    targetUrlObject.searchParams.set(key, String(value));
                 }
             }
-            const queryString = searchParams.toString();
-            if (queryString) {
-                targetUrl += `?${queryString}`;
-            }
         } else {
-            // No query args provided, default to zh-CN
-            const searchParams = new URLSearchParams();
-            searchParams.append('language', 'zh-CN');
-            targetUrl += `?${searchParams.toString()}`;
+            if (!targetUrlObject.searchParams.has('language')) {
+                targetUrlObject.searchParams.set('language', 'zh-CN');
+            }
         }
 
+        const targetUrl = targetUrlObject.toString();
         console.log(`Forwarding request to: ${targetUrl}`);
 
         const response = await fetch(targetUrl, {

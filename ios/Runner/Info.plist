@@ -16,14 +16,59 @@
 		<string>6.0</string>
 		<key>CFBundleName</key>
 		<string>Epilog</string>
-		<key>NSPhotoLibraryUsageDescription</key>
-		<string>We need access to your photo library to allow you to upload a profile picture.</string>
-		<key>NSCameraUsageDescription</key>
-		<string>We need access to your camera to allow you to take a profile picture.</string>
-		<key>NSMicrophoneUsageDescription</key>
-		<string>We need access to your microphone for video recording.</string>
 		<key>CFBundlePackageType</key>
 		<string>APPL</string>
+		<key>CFBundleIcons</key>
+		<dict>
+			<key>CFBundleAlternateIcons</key>
+			<dict>
+				<key>new_light</key>
+				<dict>
+					<key>CFBundleIconFiles</key>
+					<array>
+						<string>AppIcon-new_light</string>
+					</array>
+					<key>UIPrerenderedIcon</key>
+					<true/>
+				</dict>
+				<key>new_dark</key>
+				<dict>
+					<key>CFBundleIconFiles</key>
+					<array>
+						<string>AppIcon-new_dark</string>
+					</array>
+					<key>UIPrerenderedIcon</key>
+					<true/>
+				</dict>
+				<key>ticket_warm</key>
+				<dict>
+					<key>CFBundleIconFiles</key>
+					<array>
+						<string>AppIcon-ticket_warm</string>
+					</array>
+					<key>UIPrerenderedIcon</key>
+					<true/>
+				</dict>
+				<key>ticket_purple</key>
+				<dict>
+					<key>CFBundleIconFiles</key>
+					<array>
+						<string>AppIcon-ticket_purple</string>
+					</array>
+					<key>UIPrerenderedIcon</key>
+					<true/>
+				</dict>
+				<key>dark</key>
+				<dict>
+					<key>CFBundleIconFiles</key>
+					<array>
+						<string>AppIcon-dark</string>
+					</array>
+					<key>UIPrerenderedIcon</key>
+					<true/>
+				</dict>
+			</dict>
+		</dict>
 		<key>CFBundleShortVersionString</key>
 		<string>$(FLUTTER_BUILD_NAME)</string>
 		<key>CFBundleSignature</key>
@@ -43,6 +88,33 @@
 		<string>$(FLUTTER_BUILD_NUMBER)</string>
 		<key>LSRequiresIPhoneOS</key>
 		<true/>
+		<key>NSCameraUsageDescription</key>
+		<string>We need access to your camera to allow you to take a profile picture.</string>
+		<key>NSMicrophoneUsageDescription</key>
+		<string>We need access to your microphone for video recording.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>We need access to your photo library to allow you to upload a profile picture.</string>
+		<key>UIApplicationSceneManifest</key>
+		<dict>
+			<key>UIApplicationSupportsMultipleScenes</key>
+			<false/>
+			<key>UISceneConfigurations</key>
+			<dict>
+				<key>UIWindowSceneSessionRoleApplication</key>
+				<array>
+					<dict>
+						<key>UISceneClassName</key>
+						<string>UIWindowScene</string>
+						<key>UISceneConfigurationName</key>
+						<string>flutter</string>
+						<key>UISceneDelegateClassName</key>
+						<string>FlutterSceneDelegate</string>
+						<key>UISceneStoryboardFile</key>
+						<string>Main</string>
+					</dict>
+				</array>
+			</dict>
+		</dict>
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>
 		<key>UILaunchStoryboardName</key>

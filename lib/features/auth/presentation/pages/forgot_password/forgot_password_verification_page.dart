@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:clerk_auth/clerk_auth.dart' as clerk;
+import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -16,27 +18,44 @@ class ForgotPasswordVerificationPage extends StatefulWidget {
   const ForgotPasswordVerificationPage({super.key, required this.email});
 
   @override
-  State<ForgotPasswordVerificationPage> createState() => _ForgotPasswordVerificationPageState();
+  State<ForgotPasswordVerificationPage> createState() =>
+      _ForgotPasswordVerificationPageState();
 }
 
-class _ForgotPasswordVerificationPageState extends State<ForgotPasswordVerificationPage> {
+class _ForgotPasswordVerificationPageState
+    extends State<ForgotPasswordVerificationPage> {
   final _authRepository = AuthRepository();
   // Clerk defaults to 6 digits
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final List<TextEditingController> _controllers = List.generate(6, (_) => TextEditingController());
+  final List<TextEditingController> _controllers =
+      List.generate(6, (_) => TextEditingController());
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
 
   bool _isVerifying = false;
   bool _rememberMe = false;
+  bool _passwordHasError = false;
+  String _lastPasswordInput = '';
+  String _lastConfirmPasswordInput = '';
   int _secondsRemaining = 30;
   bool _canResend = false;
   Timer? _timer;
 
+  static const _compromisedPasswordMessage = '该密码曾出现在网络泄露中。为了账号安全，请换一个不同的新密码。';
+  static const _shortPasswordMessage = '密码至少需要 8 位，请重新输入。';
+  static const _weakPasswordMessage = '密码强度不足，请使用更强的密码。';
+
   @override
   void initState() {
     super.initState();
+    _loadRememberMePreference();
     _startTimer();
+  }
+
+  Future<void> _loadRememberMePreference() async {
+    final rememberMe = await SecureStorageService.rememberMe;
+    if (!mounted) return;
+    setState(() => _rememberMe = rememberMe);
   }
 
   @override
@@ -69,32 +88,134 @@ class _ForgotPasswordVerificationPageState extends State<ForgotPasswordVerificat
     });
   }
 
-  void _handleResend() {
-    // Logic to resend email would go here
-    // For now just restart timer
-    _startTimer();
+  void _setPasswordError() {
+    setState(() {
+      _passwordHasError = true;
+      _lastPasswordInput = _passwordController.text;
+      _lastConfirmPasswordInput = _confirmPasswordController.text;
+    });
+  }
+
+  void _clearPasswordErrorIfEdited() {
+    if (!_passwordHasError) return;
+
+    final passwordInput = _passwordController.text;
+    final confirmPasswordInput = _confirmPasswordController.text;
+    if (passwordInput == _lastPasswordInput &&
+        confirmPasswordInput == _lastConfirmPasswordInput) {
+      return;
+    }
+
+    setState(() {
+      _passwordHasError = false;
+      _lastPasswordInput = passwordInput;
+      _lastConfirmPasswordInput = confirmPasswordInput;
+    });
+  }
+
+  String _passwordErrorMessage(Object error) {
+    final errorMessage = error.toString().toLowerCase();
+
+    if (_isCompromisedPasswordError(errorMessage)) {
+      return _compromisedPasswordMessage;
+    }
+
+    if (_isShortPasswordError(errorMessage)) {
+      return _shortPasswordMessage;
+    }
+
+    if (_isWeakPasswordError(errorMessage)) {
+      return _weakPasswordMessage;
+    }
+
+    return '验证失败: $error';
+  }
+
+  bool _isPasswordError(Object error) {
+    final errorMessage = error.toString().toLowerCase();
+    return _isCompromisedPasswordError(errorMessage) ||
+        _isShortPasswordError(errorMessage) ||
+        _isWeakPasswordError(errorMessage);
+  }
+
+  bool _isCompromisedPasswordError(String errorMessage) {
+    return errorMessage.contains('data breach') ||
+        errorMessage.contains('pwned') ||
+        errorMessage.contains('online data breach') ||
+        errorMessage.contains('form_password_pwned');
+  }
+
+  bool _isShortPasswordError(String errorMessage) {
+    return errorMessage.contains('8 characters') ||
+        errorMessage.contains('8 character') ||
+        errorMessage.contains('passwords must be 8');
+  }
+
+  bool _isWeakPasswordError(String errorMessage) {
+    return errorMessage.contains('password') && errorMessage.contains('weak');
+  }
+
+  Future<void> _handleResend() async {
+    if (!_canResend || _isVerifying) return;
+
+    try {
+      await _authRepository.sendPasswordResetEmail(email: widget.email);
+      if (!mounted) return;
+      AppSnackBar.showSuccess(context, "验证码已重新发送");
+      _startTimer();
+    } catch (e) {
+      if (!mounted) return;
+      AppSnackBar.showError(context, message: "重发失败: $e");
+    }
   }
 
   Future<void> _handleVerify() async {
     final code = _controllers.map((c) => c.text).join();
     final password = _passwordController.text.trim();
+    final confirmPassword = _confirmPasswordController.text.trim();
 
     if (code.length != 6) return;
     if (password.isEmpty || password.length < 8) {
-      AppSnackBar.showWarning(context, "请输入至少8位新密码");
+      _setPasswordError();
+      AppSnackBar.showWarning(context, _shortPasswordMessage);
+      return;
+    }
+    if (password != confirmPassword) {
+      _setPasswordError();
+      AppSnackBar.showWarning(context, "两次输入的密码不一致");
       return;
     }
 
-    setState(() => _isVerifying = true);
+    setState(() {
+      _isVerifying = true;
+      _passwordHasError = false;
+      _lastPasswordInput = password;
+      _lastConfirmPasswordInput = confirmPassword;
+    });
 
     try {
-      await _authRepository.verifyPasswordResetOtp(
-        email: widget.email,
-        token: code,
-        password: password,
-      );
+      clerk.AuthError? clerkError;
+      final errorSub = ClerkAuth.errorStreamOf(context).listen((error) {
+        clerkError ??= error;
+      });
 
-      // Save credentials if "Remember Me" is checked
+      try {
+        await _authRepository.verifyPasswordResetOtp(
+          email: widget.email,
+          token: code,
+          password: password,
+        );
+        if (clerkError == null) {
+          await Future<void>.delayed(const Duration(milliseconds: 150));
+        }
+      } finally {
+        await errorSub.cancel();
+      }
+
+      if (clerkError != null) {
+        throw clerkError!;
+      }
+
       if (_rememberMe) {
         await SecureStorageService.saveCredentials(
           email: widget.email,
@@ -102,6 +223,12 @@ class _ForgotPasswordVerificationPageState extends State<ForgotPasswordVerificat
         );
       } else {
         await SecureStorageService.clearCredentials();
+      }
+
+      try {
+        await _authRepository.signOut();
+      } catch (e) {
+        debugPrint('Clerk sign out after password reset failed: $e');
       }
 
       if (mounted) {
@@ -119,24 +246,13 @@ class _ForgotPasswordVerificationPageState extends State<ForgotPasswordVerificat
       }
     } catch (e) {
       if (mounted) {
-        String errorMessage;
-        final errStr = e.toString().toLowerCase();
-
-        if (errStr.contains('form_password_pwned') || errStr.contains('data breach') || errStr.contains('pwned')) {
-          errorMessage = "该密码不够安全（曾在历史数据泄露中出现），请使用更复杂的密码";
-        } else if (errStr.contains('password') && errStr.contains('weak')) {
-          errorMessage = "密码强度太低，请尝试更复杂的组合";
-        } else {
-          errorMessage = "验证失败: $e";
+        if (_isPasswordError(e)) {
+          _setPasswordError();
         }
-
-        await showAnimatedDialog(
-          context: context,
-          builder: (context) => VerificationMessageDialog(
-            status: VerificationStatus.failure,
-            message: errorMessage,
-          ),
-        );
+        AppSnackBar.showError(context, message: _passwordErrorMessage(e));
+      }
+    } finally {
+      if (mounted) {
         setState(() => _isVerifying = false);
       }
     }
@@ -144,9 +260,13 @@ class _ForgotPasswordVerificationPageState extends State<ForgotPasswordVerificat
 
   void _onCodeChanged(String value, int index) {
     if (value.isNotEmpty) {
-      if (index < 5) _focusNodes[index + 1].requestFocus(); // Adjusted loop limit
+      if (index < 5) {
+        _focusNodes[index + 1].requestFocus(); // Adjusted loop limit
+      }
     } else {
-      if (index > 0) _focusNodes[index - 1].requestFocus();
+      if (index > 0) {
+        _focusNodes[index - 1].requestFocus();
+      }
     }
   }
 
@@ -157,8 +277,10 @@ class _ForgotPasswordVerificationPageState extends State<ForgotPasswordVerificat
     // Colors
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : Colors.black87;
-    final inputFillColor = isDark ? const Color(0xFF2C2C2C) : Colors.grey.shade100;
-    final inputBorderColor = isDark ? Colors.grey.shade700 : Colors.grey.shade300;
+    final inputFillColor =
+        isDark ? const Color(0xFF2C2C2C) : Colors.grey.shade100;
+    final inputBorderColor =
+        isDark ? Colors.grey.shade700 : Colors.grey.shade300;
 
     return Scaffold(
       appBar: AppBar(
@@ -173,7 +295,9 @@ class _ForgotPasswordVerificationPageState extends State<ForgotPasswordVerificat
             Text(
               "请输入发送至 ${widget.email} 的验证码",
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+              style: TextStyle(
+                  fontSize: 16,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
             ),
             const SizedBox(height: 32),
 
@@ -190,7 +314,10 @@ class _ForgotPasswordVerificationPageState extends State<ForgotPasswordVerificat
                     keyboardType: TextInputType.number,
                     textAlign: TextAlign.center,
                     maxLength: 1,
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor),
+                    style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: textColor),
                     decoration: InputDecoration(
                       counterText: "",
                       filled: true,
@@ -205,7 +332,8 @@ class _ForgotPasswordVerificationPageState extends State<ForgotPasswordVerificat
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppTheme.primary, width: 2),
+                        borderSide:
+                            const BorderSide(color: AppTheme.primary, width: 2),
                       ),
                       contentPadding: EdgeInsets.zero,
                     ),
@@ -224,6 +352,8 @@ class _ForgotPasswordVerificationPageState extends State<ForgotPasswordVerificat
               hintText: '输入新密码',
               prefixIcon: Icons.lock_outline,
               isPassword: true,
+              hasError: _passwordHasError,
+              onChanged: (_) => _clearPasswordErrorIfEdited(),
             ),
             const SizedBox(height: 16),
             AuthTextField(
@@ -231,6 +361,8 @@ class _ForgotPasswordVerificationPageState extends State<ForgotPasswordVerificat
               hintText: '确认新密码',
               prefixIcon: Icons.lock_outline,
               isPassword: true,
+              hasError: _passwordHasError,
+              onChanged: (_) => _clearPasswordErrorIfEdited(),
             ),
 
             const SizedBox(height: 24),
@@ -252,7 +384,8 @@ class _ForgotPasswordVerificationPageState extends State<ForgotPasswordVerificat
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    onChanged: (val) => setState(() => _rememberMe = val ?? false),
+                    onChanged: (val) =>
+                        setState(() => _rememberMe = val ?? false),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -274,13 +407,17 @@ class _ForgotPasswordVerificationPageState extends State<ForgotPasswordVerificat
               children: [
                 Text("重新发送 ", style: TextStyle(fontSize: 14, color: textColor)),
                 Text("$_secondsRemaining s",
-                    style: const TextStyle(fontSize: 14, color: AppTheme.primary, fontWeight: FontWeight.bold)),
+                    style: const TextStyle(
+                        fontSize: 14,
+                        color: AppTheme.primary,
+                        fontWeight: FontWeight.bold)),
               ],
             ),
             if (_canResend)
               TextButton(
                 onPressed: _handleResend,
-                child: const Text("重新发送验证码", style: TextStyle(color: AppTheme.primary)),
+                child: const Text("重新发送验证码",
+                    style: TextStyle(color: AppTheme.primary)),
               ),
 
             const SizedBox(height: 48),
@@ -292,16 +429,21 @@ class _ForgotPasswordVerificationPageState extends State<ForgotPasswordVerificat
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primary,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30)),
                 ),
                 child: _isVerifying
                     ? const SizedBox(
                         height: 24,
                         width: 24,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2),
                       )
                     : const Text("验 证",
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white)),
               ),
             ),
           ],

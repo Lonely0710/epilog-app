@@ -35,6 +35,11 @@ class AppTheme {
   static const Color detailPageBackground = Colors.white;
   static const Color chipBackground = Color(0xFFF3F4F6);
 
+  // Keep ordinary UI typography aligned with the app's platform rules.
+  //
+  // iOS resolves null to San Francisco for Latin text and PingFang SC for
+  // Simplified Chinese. Android uses Noto Sans SC, the Google-distributed
+  // counterpart to Source Han Sans.
   static String? get primaryFont {
     if (Platform.isIOS) {
       return null;

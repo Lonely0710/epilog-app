@@ -15,6 +15,9 @@ class LibraryGridView extends StatelessWidget {
   final IconData emptyIcon;
   final int crossAxisCount;
   final double? childAspectRatio;
+  final double topPadding;
+  final double bottomPadding;
+  final bool showWatchStatus;
 
   const LibraryGridView({
     super.key,
@@ -26,16 +29,20 @@ class LibraryGridView extends StatelessWidget {
     this.emptyIcon = Icons.collections_bookmark_outlined,
     this.crossAxisCount = 2,
     this.childAspectRatio,
+    this.topPadding = 12,
+    this.bottomPadding = 112,
+    this.showWatchStatus = true,
   });
 
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return Center(
-        child: Lottie.asset(
-          'assets/lottie/movie_loading.json',
+      return Align(
+        alignment: const Alignment(0, -0.28),
+        child: SizedBox(
           width: 200,
           height: 200,
+          child: Lottie.asset('assets/lottie/movie_loading.json'),
         ),
       );
     }
@@ -45,7 +52,7 @@ class LibraryGridView extends StatelessWidget {
         message: emptyMessage,
         icon: emptyIcon,
         svgAsset: emptySvg,
-        onAction: null, // No retry button for library empty state
+        onAction: onRefresh,
       );
     }
 
@@ -54,7 +61,12 @@ class LibraryGridView extends StatelessWidget {
         onRefresh?.call();
       },
       child: GridView.builder(
-        padding: const EdgeInsets.fromLTRB(10, 0, 10, 30),
+        padding: EdgeInsets.fromLTRB(
+          10,
+          topPadding,
+          10,
+          MediaQuery.of(context).padding.bottom + bottomPadding,
+        ),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: crossAxisCount,
           childAspectRatio: childAspectRatio ?? 2 / 3, // Poster aspect ratio
@@ -64,8 +76,12 @@ class LibraryGridView extends StatelessWidget {
         itemCount: items.length,
         itemBuilder: (context, index) {
           final media = items[index];
+          final heroTag = media.posterUrl.isEmpty ? null : media.posterUrl;
+
           return LibraryPosterItem(
             media: media,
+            heroTag: heroTag,
+            showWatchStatus: showWatchStatus,
             onTap: () {
               context.push('/detail', extra: media);
             },

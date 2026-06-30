@@ -20,6 +20,12 @@ class ConvexUserRepository {
     controller.onListen = () async {
       if (isCancelled) return;
       try {
+        final isAuthenticated = await ConvexService.instance.waitForAuthToken();
+        if (!isAuthenticated) {
+          if (!controller.isClosed) controller.add(null);
+          return;
+        }
+
         final client = ConvexService.instance.client;
 
         // Await the subscription future

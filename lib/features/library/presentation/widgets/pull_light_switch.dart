@@ -29,8 +29,8 @@ class _PullLightSwitchState extends State<PullLightSwitch>
   double _bounceOffset = 0.0; // Inertia bounce offset
 
   final double _restLength = 30.0;
-  final double _triggerDistance = 85.0;
-  final double _maxStretch = 250.0;
+  final double _triggerDistance = 88.0;
+  final double _maxStretch = 290.0;
 
   bool _isInitialized = false;
 
@@ -46,13 +46,12 @@ class _PullLightSwitchState extends State<PullLightSwitch>
     // Initialize all controllers
     _springController = AnimationController(
       vsync: this,
-      upperBound: 600,
+      upperBound: 760,
     );
 
     _bounceController = AnimationController(
       vsync: this,
-      duration:
-          const Duration(milliseconds: 2000), // Long duration for slow bounce
+      duration: const Duration(milliseconds: 1650),
     );
 
     // Add listeners
@@ -96,12 +95,11 @@ class _PullLightSwitchState extends State<PullLightSwitch>
       // The further pulled, the smoother resistance grows (won't suddenly become stiff)
       double pullRatio = (_pullDistance / _maxStretch).clamp(0.0, 1.0);
       // Smooth easing curve: 1 - (x^2) instead of linear decrease
-      double resistance = 1.0 - (pullRatio * pullRatio * 0.75);
+      double resistance = 1.0 - (pullRatio * pullRatio * 0.62);
 
       // When pushing up (negative), less resistance for smoother feel
       if (deltaY < 0) {
-        resistance =
-            1.0 + pullRatio * 0.2; // Accelerate slightly when pushing up
+        resistance = 1.0 + pullRatio * 0.08;
       }
 
       double newDistance = _pullDistance + deltaY * resistance;
@@ -120,16 +118,15 @@ class _PullLightSwitchState extends State<PullLightSwitch>
     final releaseVelocity = details.velocity.pixelsPerSecond.dy;
     final currentPull = _pullDistance;
 
-    // Very slow and bouncy spring simulation
     final verticalSimulation = SpringSimulation(
       SpringDescription(
-        mass: 4.0, // Very heavy mass - much slower rebound
-        stiffness: 12.0, // Very low stiffness - loose rope
-        damping: 3.0, // Low damping - more bouncy
+        mass: 1.55,
+        stiffness: 24.0,
+        damping: 10.8,
       ),
       _pullDistance,
       0.0,
-      releaseVelocity * 0.08, // Reduce initial velocity influence
+      releaseVelocity * 0.08,
     );
 
     _springController?.animateWith(verticalSimulation);
@@ -146,8 +143,8 @@ class _PullLightSwitchState extends State<PullLightSwitch>
     _bounceController?.reset();
 
     // Calculate bounce amplitude based on pull distance and velocity
-    double bounceAmplitude = (pullDistance * 0.12) + (velocity.abs() * 0.008);
-    bounceAmplitude = bounceAmplitude.clamp(5.0, 25.0);
+    double bounceAmplitude = (pullDistance * 0.11) + (velocity.abs() * 0.006);
+    bounceAmplitude = bounceAmplitude.clamp(5.0, 18.0);
 
     // Multi-phase bounce animation simulating inertia
     Animation<double> bounceAnim = TweenSequence<double>([
@@ -155,34 +152,34 @@ class _PullLightSwitchState extends State<PullLightSwitch>
       TweenSequenceItem(
         tween: Tween<double>(begin: 0.0, end: -bounceAmplitude)
             .chain(CurveTween(curve: Curves.easeOutCubic)),
-        weight: 15,
+        weight: 24,
       ),
       // Phase 2: Slow drop back down past rest position
       TweenSequenceItem(
         tween:
-            Tween<double>(begin: -bounceAmplitude, end: bounceAmplitude * 0.5)
+            Tween<double>(begin: -bounceAmplitude, end: bounceAmplitude * 0.62)
                 .chain(CurveTween(curve: Curves.easeInOutSine)),
-        weight: 20,
+        weight: 26,
       ),
       // Phase 3: Gentle bounce back up
       TweenSequenceItem(
         tween: Tween<double>(
-                begin: bounceAmplitude * 0.5, end: -bounceAmplitude * 0.25)
+                begin: bounceAmplitude * 0.62, end: -bounceAmplitude * 0.36)
             .chain(CurveTween(curve: Curves.easeInOutSine)),
-        weight: 20,
+        weight: 18,
       ),
       // Phase 4: Small bounce down
       TweenSequenceItem(
         tween: Tween<double>(
-                begin: -bounceAmplitude * 0.25, end: bounceAmplitude * 0.1)
+                begin: -bounceAmplitude * 0.36, end: bounceAmplitude * 0.16)
             .chain(CurveTween(curve: Curves.easeInOutSine)),
-        weight: 20,
+        weight: 14,
       ),
       // Phase 5: Settle to rest
       TweenSequenceItem(
-        tween: Tween<double>(begin: bounceAmplitude * 0.1, end: 0.0)
-            .chain(CurveTween(curve: Curves.easeOutSine)),
-        weight: 25,
+        tween: Tween<double>(begin: bounceAmplitude * 0.16, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeOutCubic)),
+        weight: 18,
       ),
     ]).animate(_bounceController!);
 
@@ -199,7 +196,11 @@ class _PullLightSwitchState extends State<PullLightSwitch>
   Widget build(BuildContext context) {
     // Calculate handle position - vertical only, no rotation
     // Apply bounce offset for inertia effect
-    final currentLength = _restLength + _pullDistance + _bounceOffset;
+    final easedPull = Curves.easeOutCubic.transform(
+      (_pullDistance / _maxStretch).clamp(0.0, 1.0),
+    );
+    final currentLength =
+        _restLength + (easedPull * _maxStretch * 0.96) + _bounceOffset;
 
     // Handle hangs straight down from anchor
     final handlePosition = widget.anchorOffset + Offset(0, currentLength);

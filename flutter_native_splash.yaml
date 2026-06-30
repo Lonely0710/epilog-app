@@ -4,9 +4,11 @@
 flutter_native_splash:
   # Background color for light mode (white)
   color: "#FFFFFF"
+  image: assets/icons/ic_logo.png
 
   # Background color for dark mode (AppColors.backgroundDark)
   color_dark: "#0D1B2A"
+  image_dark: assets/icons/ic_logo.png
 
   # Android specific settings
   android: true
@@ -24,3 +26,5 @@ flutter_native_splash:
   android_12:
     color: "#FFFFFF"
     color_dark: "#0D1B2A"
+    image: assets/icons/ic_logo.png
+    image_dark: assets/icons/ic_logo.png

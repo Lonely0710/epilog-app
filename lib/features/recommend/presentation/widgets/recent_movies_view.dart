@@ -59,7 +59,8 @@ class _RecentMoviesViewState extends State<RecentMoviesView> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return Center(
+      return Align(
+        alignment: const Alignment(0, -0.28),
         child: Lottie.asset(
           'assets/lottie/movie_loading.json',
           width: 200,
@@ -70,7 +71,6 @@ class _RecentMoviesViewState extends State<RecentMoviesView> {
 
     if (_movies.isEmpty) {
       return EmptyStateWidget(
-        message: '暂无相关影视推荐',
         icon: Icons.movie_outlined,
         onAction: _loadData,
       );
@@ -78,14 +78,19 @@ class _RecentMoviesViewState extends State<RecentMoviesView> {
 
     return RefreshIndicator(
       onRefresh: _loadData,
-      child: ListView.builder(
-        itemCount: _movies.length,
-        itemBuilder: (context, index) {
-          final movie = _movies[index];
-          return RecentMovieItem(
-            movie: movie,
-          );
-        },
+      child: MediaQuery.removePadding(
+        context: context,
+        removeTop: true,
+        child: ListView.builder(
+          padding: const EdgeInsets.only(top: 4, bottom: 110),
+          itemCount: _movies.length,
+          itemBuilder: (context, index) {
+            final movie = _movies[index];
+            return RecentMovieItem(
+              movie: movie,
+            );
+          },
+        ),
       ),
     );
   }

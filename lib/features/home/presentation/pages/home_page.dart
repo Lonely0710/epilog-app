@@ -9,9 +9,7 @@ class HomePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return const HomeBackground(
-      child: SafeArea(
-        child: HomeContent(),
-      ),
+      child: HomeContent(),
     );
   }
 }

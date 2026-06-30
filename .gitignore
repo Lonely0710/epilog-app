@@ -51,3 +51,7 @@ app.*.map.json
 /android/app/release
 .env
 .env.local
+
+.agents
+
+assets/app_icon

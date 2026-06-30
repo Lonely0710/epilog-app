@@ -33,6 +33,8 @@ interface MediaItem {
     matchCount?: number;
 }
 
+const BANGUMI_SEARCH_RESULT_LIMIT = 10;
+
 // ============================================================================
 // Main Action
 // ============================================================================
@@ -63,7 +65,7 @@ export const search = action({
         resultsArray.forEach(r => flattenedResults.push(...r));
 
         // Deduplication and Merging
-        return mergeAndDeduplicate(flattenedResults);
+        return mergeAndDeduplicate(flattenedResults, query);
     },
 });
 
@@ -161,7 +163,9 @@ function tmdbItemToMedia(item: any, mediaType: string): MediaItem {
         directors = (item.credits.crew || [])
             .filter((m: any) => m.job === "Director")
             .map((m: any) => m.name).slice(0, 3);
-        actors = (item.credits.cast || []).map((m: any) => m.name).slice(0, 5);
+        actors = (item.credits.cast || [])
+            .map((m: any) => String(m.name || "").trim())
+            .filter((name: string) => name.length > 0);
     }
 
     return {
@@ -197,209 +201,180 @@ function tmdbItemToMedia(item: any, mediaType: string): MediaItem {
 
 async function searchBangumi(query: string): Promise<MediaItem[]> {
     try {
-        const url = `https://bgm.tv/subject_search/${encodeURIComponent(query)}?cat=2`;
-        const response = await fetch(url, {
-            headers: {
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Cookie": "chii_searchDateLine=0",
-            },
-        });
-
-        if (!response.ok) return [];
-
-        const html = await response.text();
-        const $ = cheerio.load(html);
-        const items: MediaItem[] = [];
-        $("#browserItemList > li").slice(0, 8).each((_, element) => {
-            const item = parseBangumiItem($, element);
-            if (item) items.push(item);
-        });
-
-        // Parallel detail fetch for summary
-        const detailedItems = await Promise.all(
-            items.map(item => fetchBangumiDetails(item))
-        );
-
-        return detailedItems;
+        return searchBangumiApi(query);
     } catch (e) {
         console.error("Bangumi search error:", e);
         return [];
     }
 }
 
-async function fetchBangumiDetails(item: MediaItem): Promise<MediaItem> {
+async function searchBangumiApi(query: string): Promise<MediaItem[]> {
+    const response = await fetch("https://api.bgm.tv/v0/search/subjects", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "User-Agent": "EpilogApp/1.0 (https://github.com/Lonely0710/epilog-app)",
+        },
+        body: JSON.stringify({
+            keyword: query,
+            sort: "match",
+            filter: { type: [2] },
+        }),
+    });
+
+    if (!response.ok) return [];
+
+    const data = await response.json();
+    const results = Array.isArray(data?.data) ? data.data : [];
+
+    const items = await Promise.all(
+        results
+            .slice(0, BANGUMI_SEARCH_RESULT_LIMIT)
+            .map(bangumiApiItemToMedia)
+    );
+
+    return items.filter((item): item is MediaItem => item !== null);
+}
+
+async function bangumiApiItemToMedia(item: any): Promise<MediaItem | null> {
+    const sourceId = item?.id?.toString() || "";
+    if (!sourceId) return null;
+
+    const info = parseBangumiInfobox(item.infobox);
+    const releaseDate = normalizeBangumiDate(item.date || info["放送开始"] || info["上映年度"] || "");
+    const year = releaseDate.length >= 4 ? releaseDate.substring(0, 4) : "----";
+    const episodeCount = item.total_episodes || item.eps || info["话数"];
+    const duration = episodeCount ? `共${episodeCount}话` : "未知";
+    const rating = Number(item.rating?.score) || 0;
+    const directors = splitBangumiPeople(info["导演"]).slice(0, 3);
+    const staff = buildBangumiStaff(info);
+    const actors = await fetchBangumiVoiceActors(sourceId);
+
+    return {
+        sourceType: "bgm",
+        sourceId,
+        sourceUrl: `https://bangumi.tv/subject/${sourceId}`,
+        mediaType: "anime",
+        titleZh: item.name_cn || item.name || "未知标题",
+        titleOriginal: item.name || "",
+        releaseDate,
+        duration,
+        year,
+        posterUrl: toHttpsUrl(item.images?.large || item.image || item.images?.common || ""),
+        summary: item.summary || "暂无简介",
+        staff,
+        directors,
+        actors,
+        rating,
+        ratingDouban: 0,
+        ratingImdb: 0,
+        ratingBangumi: rating,
+        ratingMaoyan: 0,
+
+        wish: "",
+        isNew: false,
+        matchCount: 1,
+    };
+}
+
+async function fetchBangumiVoiceActors(sourceId: string): Promise<string[]> {
     try {
-        const response = await fetch(item.sourceUrl, {
+        const response = await fetch(`https://api.bgm.tv/v0/subjects/${sourceId}/characters`, {
             headers: {
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Cookie": "chii_searchDateLine=0",
+                "User-Agent": "EpilogApp/1.0 (https://github.com/Lonely0710/epilog-app)",
             },
         });
+        if (!response.ok) return [];
 
-        if (!response.ok) return item;
+        const data = await response.json();
+        if (!Array.isArray(data)) return [];
 
-        const html = await response.text();
-        const $ = cheerio.load(html);
-
-        // Parse Summary
-        const summary = $("#subject_summary").text().trim();
-        if (summary) item.summary = summary;
-
-        // Parse Infobox for detailed info (staff, episodes, etc.)
-        const infobox = $("#infobox");
-        if (infobox.length) {
-            const info: Record<string, string> = {};
-            infobox.find("li").each((_, el) => {
-                const text = $(el).text().trim();
-                const parts = text.split(":");
-                if (parts.length >= 2) {
-                    const key = parts[0].trim();
-                    const value = parts.slice(1).join(":").trim();
-                    info[key] = value;
-                }
-            });
-
-            // Director
-            if (info["导演"]) {
-                item.directors = [info["导演"]];
-            }
-
-            // Staff (construct from various roles if original staff was empty or weak)
-            // Priority: Director, Script, Character Design, Music, Animation Production
-            const staffRoles = ["导演", "脚本", "人物设定", "音乐", "动画制作", "原画", "原作"];
-            const staffParts: string[] = [];
-
-            for (const role of staffRoles) {
-                if (info[role]) {
-                    staffParts.push(`${role}: ${info[role]}`);
-                }
-            }
-
-            if (staffParts.length > 0) {
-                // If we found detailed staff info, overwrite or append?
-                // Overwriting is safer as search result staff might be truncated or messy
-                item.staff = staffParts.join(" / ");
-            }
-
-            // Cast / Actors (演出)
-            if (info["演出"]) {
-                const castStr = info["演出"];
-                // Split by common separators: 、 / , ， space
-                const actors = castStr.split(/、|\/|,|，| /).map(s => s.trim()).filter(s => s);
-                item.actors = actors;
-            }
-
-            // Episodes / Duration
-            if (info["话数"]) {
-                const epCount = info["话数"];
-                if (epCount && epCount !== "*") {
-                    item.duration = `共${epCount}话`;
-                }
-            }
-
-            // Chinese Title (if missing or matches original)
-            if (info["中文名"] && (!item.titleZh || item.titleZh === item.titleOriginal)) {
-                item.titleZh = info["中文名"];
-            }
-
-            // Release Date (放送开始)
-            if (info["放送开始"]) {
-                // Format usually "2012年4月1日"
-                const dateStr = info["放送开始"];
-                item.releaseDate = dateStr.replace(/年|月/g, "-").replace(/日/g, "");
-                // Update year if needed
-                const yearMatch = dateStr.match(/^\d{4}/);
-                if (yearMatch) item.year = yearMatch[0];
+        const names: string[] = [];
+        const seen = new Set<string>();
+        for (const character of data) {
+            const actors = Array.isArray(character?.actors) ? character.actors : [];
+            for (const actor of actors) {
+                const name = String(actor?.name || "").trim();
+                if (!name || seen.has(name)) continue;
+                seen.add(name);
+                names.push(name);
+                if (names.length >= 6) return names;
             }
         }
 
-        // Parse more detailed staff if needed?
-        // For now, search list staff parsing is okay, but we can refine it here if we want full cast.
-        // But user said BGM doesn't store actors in staff, so we rely on TMDB for that.
-
-        return item;
+        return names;
     } catch (e) {
-        console.error(`Error fetching details for ${item.titleZh}:`, e);
-        return item;
+        console.error(`Bangumi characters error for ${sourceId}:`, e);
+        return [];
     }
 }
 
-function parseBangumiItem($: cheerio.CheerioAPI, element: any): MediaItem | null {
-    try {
-        const $item = $(element);
-        const titleElement = $item.find("h3 > a.l");
-        if (!titleElement.length) return null;
+function parseBangumiInfobox(infobox: any): Record<string, string> {
+    const info: Record<string, string> = {};
+    if (!Array.isArray(infobox)) return info;
 
-        const href = titleElement.attr("href") || "";
-        const sourceId = href.split("/").pop() || "";
-        const titleZh = titleElement.text().trim();
-        const titleOriginal = $item.find("h3 > small.grey").text().trim();
+    for (const entry of infobox) {
+        const key = entry?.key?.toString().trim();
+        if (!key) continue;
+        info[key] = bangumiInfoValueToString(entry.value);
+    }
 
-        // Poster
-        let posterUrl = "";
-        const imgSrc = $item.find(".subjectCover img").attr("src") || "";
-        if (imgSrc) posterUrl = "https:" + imgSrc.replace(/\/s\/|\/m\//, "/l/");
+    return info;
+}
 
-        // Info
-        const infoText = $item.find(".info.tip").text().trim();
-        let rating = parseFloat($item.find(".rateInfo small.fade").text()) || 0;
-
-        // Simple parsing for now
-        let year = "----";
-        const yearMatch = infoText.match(/(\d{4})年/);
-        if (yearMatch) year = yearMatch[1];
-
-        // Clean staff info: remove date parts
-        const cleanStaff = infoText.split(" / ")
-            .filter(part => !part.match(/^\d{4}年/)) // Remove "2014年..."
+function bangumiInfoValueToString(value: any): string {
+    if (Array.isArray(value)) {
+        return value
+            .map((item) => item?.v || item)
+            .filter(Boolean)
             .join(" / ");
-
-        // Parse Directors (first part of staff)
-        const directors: string[] = [];
-        const staffParts = cleanStaff.split("/");
-        if (staffParts.length > 0 && staffParts[0].trim()) {
-            directors.push(staffParts[0].trim());
-        }
-
-        return {
-            sourceType: "bgm",
-            sourceId,
-            sourceUrl: `https://bgm.tv/subject/${sourceId}`,
-            mediaType: "anime",
-            titleZh,
-            titleOriginal,
-            releaseDate: year !== "----" ? `${year}-01-01` : "未知日期",
-            duration: parseBangumiDuration(infoText),
-            year,
-            posterUrl,
-            summary: "暂无简介", // Will be updated by detail fetch
-            staff: cleanStaff,
-            directors, // Populated from staff
-            actors: [],
-            rating,
-            ratingDouban: 0,
-            ratingImdb: 0,
-            ratingBangumi: rating,
-            ratingMaoyan: 0,
-
-            wish: "",
-            isNew: false,
-            matchCount: 1
-        };
-    } catch (e) {
-        return null;
     }
+    return value?.toString().trim() || "";
 }
 
-// Helper to parse duration/episodes from Bangumi info text
-function parseBangumiDuration(infoText: string): string {
-    const parts = infoText.split(" / ");
-    for (const part of parts) {
-        if (part.match(/^\d+话$/)) return part; // Exact match "12话"
-        if (part.match(/共\d+话/)) return part; // "共12话"
-        if (part.match(/\d+小时/) || part.match(/\d+分钟/)) return part;
+function toHttpsUrl(value: string): string {
+    if (!value) return "";
+    if (value.startsWith("http://")) return value.replace("http://", "https://");
+    if (value.startsWith("//")) return `https:${value}`;
+    return value;
+}
+
+function normalizeBangumiDate(value: string): string {
+    if (!value) return "未知日期";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+
+    const fullDateMatch = value.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+    if (fullDateMatch) {
+        const [, y, m, d] = fullDateMatch;
+        return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
     }
-    return "未知";
+
+    const monthMatch = value.match(/(\d{4})年(\d{1,2})月/);
+    if (monthMatch) {
+        const [, y, m] = monthMatch;
+        return `${y}-${m.padStart(2, "0")}-01`;
+    }
+
+    const yearMatch = value.match(/(\d{4})/);
+    if (yearMatch) return `${yearMatch[1]}-01-01`;
+
+    return value;
+}
+
+function buildBangumiStaff(info: Record<string, string>): string {
+    const roles = ["原作", "脚本", "人物设定", "音乐", "动画制作"];
+    const parts = roles
+        .filter((role) => info[role])
+        .map((role) => `${role}: ${info[role]}`);
+    return parts.length > 0 ? parts.join(" / ") : "暂无制作信息";
+}
+
+function splitBangumiPeople(value: string | undefined): string[] {
+    if (!value) return [];
+    return value
+        .split(/、|\/|,|，/)
+        .map((item) => item.trim())
+        .filter(Boolean);
 }
 
 // ============================================================================
@@ -635,13 +610,13 @@ async function searchDouban(query: string): Promise<MediaItem[]> {
 // Merging & Deduplication
 // ============================================================================
 
-function mergeAndDeduplicate(items: MediaItem[]): MediaItem[] {
+function mergeAndDeduplicate(items: MediaItem[], query: string): MediaItem[] {
     if (items.length === 0) return [];
 
-    // Calculate completeness for each item first
+    // Prioritize relevance to the query first; completeness is only a tie-breaker.
     const scoredItems = items.map(item => ({
         ...item,
-        score: calculateCompletenessScore(item)
+        score: calculateRelevanceScore(item, query)
     }));
 
     // Sort by score descending
@@ -662,11 +637,14 @@ function mergeAndDeduplicate(items: MediaItem[]): MediaItem[] {
         }
 
         if (!found) {
-            merged.push(item);
+            const { score, ...mediaItem } = item as MediaItem & { score?: number };
+            merged.push(mediaItem);
         }
     }
 
-    return merged;
+    return merged.sort((a, b) =>
+        calculateRelevanceScore(b, query) - calculateRelevanceScore(a, query)
+    );
 }
 
 function normalizeTitle(title: string): string {
@@ -725,7 +703,25 @@ function calculateCompletenessScore(item: MediaItem): number {
     if (item.ratingMaoyan > 0) score += 8;
     if (item.directors && item.directors.length > 0) score += 8;
 
-    if (item.sourceType === "tmdb") score += 10;
+    return score;
+}
+
+function calculateRelevanceScore(item: MediaItem, query: string): number {
+    const normQuery = normalizeTitle(query);
+    const normTitle = normalizeTitle(item.titleZh);
+    const normOriginal = normalizeTitle(item.titleOriginal);
+    let score = calculateCompletenessScore(item);
+
+    if (normQuery) {
+        if (normTitle === normQuery || normOriginal === normQuery) score += 220;
+        else if (normTitle.startsWith(normQuery) || normOriginal.startsWith(normQuery)) score += 160;
+        else if (normTitle.includes(normQuery) || normOriginal.includes(normQuery)) score += 110;
+        else if (normQuery.includes(normTitle) && normTitle.length >= 2) score += 80;
+    }
+
+    if (item.sourceType === "bgm") score += 24;
+    if (item.mediaType === "anime") score += 16;
+    if ((item.matchCount || 1) > 1) score += (item.matchCount || 1) * 12;
     return score;
 }
 
@@ -760,20 +756,9 @@ function mergeItems(primary: MediaItem, secondary: MediaItem): MediaItem {
         // Use Bangumi staff text
         merged.staff = bgmItem.staff;
 
-        // Parse directors from Bangumi staff.info (text before first "/")
-        const staffParts = bgmItem.staff.split('/');
-        if (staffParts.length > 0 && staffParts[0].trim()) {
-            merged.directors = [staffParts[0].trim()];
-        } else {
-            merged.directors = [];
-        }
+        merged.directors = bgmItem.directors;
 
-        // Use TMDB actors if available
-        if (tmdbItem && tmdbItem.actors.length > 0) {
-            merged.actors = tmdbItem.actors;
-        } else {
-            merged.actors = [];
-        }
+        merged.actors = bgmItem.actors;
     }
 
     return merged;

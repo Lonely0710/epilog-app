@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/domain/entities/media.dart';
 import '../../../../app/theme/app_colors.dart';
 
@@ -18,6 +19,8 @@ class SwipeableMediaCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
@@ -47,7 +50,7 @@ class SwipeableMediaCard extends StatelessWidget {
             else
               Container(color: AppColors.primary),
 
-            // Gradient Overlay
+            // Full-card gradient keeps bright posters readable without dulling the art.
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -55,10 +58,11 @@ class SwipeableMediaCard extends StatelessWidget {
                   end: Alignment.bottomCenter,
                   colors: [
                     Colors.transparent,
-                    Colors.black.withValues(alpha: 0.2),
-                    Colors.black.withValues(alpha: 0.8),
+                    Colors.black.withValues(alpha: 0.04),
+                    Colors.black.withValues(alpha: 0.34),
+                    Colors.black.withValues(alpha: 0.88),
                   ],
-                  stops: const [0.5, 0.7, 1.0],
+                  stops: const [0.42, 0.58, 0.78, 1.0],
                 ),
               ),
             ),
@@ -77,19 +81,21 @@ class SwipeableMediaCard extends StatelessWidget {
                 top: 24,
                 right: 24,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                    borderRadius: BorderRadius.circular(999),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: 0.2)),
                   ),
                   child: Text(
                     media.mediaType == 'tv' ? 'TV' : 'MOVIE',
-                    style: const TextStyle(
+                    style: GoogleFonts.ebGaramond(
                       color: Colors.white,
                       fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
                     ),
                   ),
                 ),
@@ -99,59 +105,140 @@ class SwipeableMediaCard extends StatelessWidget {
             _buildSwipeIndicators(),
 
             // Text Content
-            Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: _getSourceBgColor(media.sourceType),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: _buildSourceIcon(media.sourceType),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.42),
+                      Colors.black.withValues(alpha: 0.9),
+                    ],
+                    stops: const [0, 0.46, 1],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    media.titleZh,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      shadows: [
-                        Shadow(blurRadius: 8, color: Colors.black, offset: Offset(0, 2)),
-                      ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: _getSourceBgColor(media.sourceType),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: _buildSourceIcon(media.sourceType),
                     ),
-                  ),
-                  if (media.rating > 0) ...[
                     const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        const Icon(Icons.star, color: Colors.amber, size: 20),
-                        const SizedBox(width: 4),
-                        Text(
-                          media.rating.toStringAsFixed(1),
-                          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
-                  ],
-                  if (media.summary.isNotEmpty) ...[
-                    const SizedBox(height: 12),
                     Text(
-                      media.summary,
-                      maxLines: 3,
+                      media.titleZh,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.9),
-                        fontSize: 14,
-                        height: 1.4,
+                      style: textTheme.headlineSmall?.copyWith(
+                        color: Colors.white,
+                        fontFamily: 'JingHuaSC',
+                        fontSize: 26,
+                        fontWeight: FontWeight.w700,
+                        height: 1.12,
+                        shadows: const [
+                          Shadow(
+                            blurRadius: 8,
+                            color: Colors.black,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
                       ),
                     ),
+                    if (media.rating > 0) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          SvgPicture.asset(
+                            'assets/icons/star-fill.svg',
+                            width: 20,
+                            height: 20,
+                            colorFilter: const ColorFilter.mode(
+                              Colors.amber,
+                              BlendMode.srcIn,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            media.rating.toStringAsFixed(1),
+                            style: textTheme.titleMedium?.copyWith(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              shadows: const [
+                                Shadow(
+                                  blurRadius: 6,
+                                  color: Colors.black,
+                                  offset: Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    if (media.summary.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final textScale = MediaQuery.textScalerOf(context);
+                          final summaryStyle = textTheme.bodyMedium?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.92),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            height: 1.42,
+                            shadows: const [
+                              Shadow(
+                                blurRadius: 7,
+                                color: Colors.black,
+                                offset: Offset(0, 1),
+                              ),
+                            ],
+                          );
+                          final painter = TextPainter(
+                            text: TextSpan(
+                              text: media.summary,
+                              style: summaryStyle,
+                            ),
+                            maxLines: 3,
+                            textDirection: TextDirection.ltr,
+                            textScaler: textScale,
+                          )..layout(maxWidth: constraints.maxWidth);
+
+                          if (!painter.didExceedMaxLines) {
+                            return Text(
+                              media.summary,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: summaryStyle,
+                            );
+                          }
+
+                          return ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 62),
+                            child: SingleChildScrollView(
+                              physics: const BouncingScrollPhysics(),
+                              child: Text(
+                                media.summary,
+                                style: summaryStyle,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ],
@@ -217,7 +304,8 @@ class SwipeableMediaCard extends StatelessWidget {
       if (opacity < 0.1) return const SizedBox.shrink();
 
       return Positioned(
-        bottom: 120, // Positioned near bottom to be visible relative to swipe? Or center?
+        bottom:
+            120, // Positioned near bottom to be visible relative to swipe? Or center?
         left: 0,
         right: 0,
         child: Center(
@@ -304,7 +392,7 @@ class SwipeableMediaCard extends StatelessWidget {
       case 'maoyan':
         return Colors.white; // White background for Maoyan icon
       case 'bgm':
-        return AppColors.sourceBangumi.withValues(alpha: 0.9);
+        return const Color(0xFFFFD6E8);
       default:
         return AppColors.primary.withValues(alpha: 0.8);
     }
@@ -328,7 +416,8 @@ class SwipeableMediaCard extends StatelessWidget {
         // Fallback to text for unknown sources
         return Text(
           type.toUpperCase(),
-          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+          style: const TextStyle(
+              color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
         );
     }
 
@@ -359,7 +448,8 @@ class SwipeableMediaCard extends StatelessWidget {
           // SVG Seal Icon - Horizontally flipped
           Transform(
             alignment: Alignment.center,
-            transform: Matrix4.rotationY(3.14159), // Flip horizontally (π radians)
+            transform:
+                Matrix4.rotationY(3.14159), // Flip horizontally (π radians)
             child: SvgPicture.asset(
               'assets/icons/ic_seal_date.svg',
               width: 130,
@@ -375,7 +465,8 @@ class SwipeableMediaCard extends StatelessWidget {
             angle: -0.55,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              constraints: const BoxConstraints(maxWidth: 85), // Constrain width
+              constraints:
+                  const BoxConstraints(maxWidth: 85), // Constrain width
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Text(

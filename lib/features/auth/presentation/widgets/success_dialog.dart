@@ -150,7 +150,7 @@ class _SuccessDialogState extends State<SuccessDialog>
             const SizedBox(height: 24),
             // Title
             const Text(
-              "Congratulations!",
+              "恭喜！",
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
@@ -160,7 +160,7 @@ class _SuccessDialogState extends State<SuccessDialog>
             const SizedBox(height: 16),
             // Body
             const Text(
-              "Your account is ready to use. You will be redirected to the Home page in a few seconds..",
+              "您的账号已准备就绪，几秒后将自动跳转到首页。",
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,

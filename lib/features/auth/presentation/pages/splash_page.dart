@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:lottie/lottie.dart';
 import '../../data/auth_repository.dart';
+import '../../../../core/services/secure_storage_service.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -11,6 +13,8 @@ class SplashPage extends StatefulWidget {
 }
 
 class _SplashPageState extends State<SplashPage> {
+  static const _minimumDisplayDuration = Duration(milliseconds: 2200);
+
   @override
   void initState() {
     super.initState();
@@ -18,15 +22,19 @@ class _SplashPageState extends State<SplashPage> {
   }
 
   Future<void> _checkAuth() async {
-    // Keep the animation for at least 2 seconds for branding
-    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
+
+    final minimumDisplay = Future<void>.delayed(_minimumDisplayDuration);
+    final isAuthenticated = AuthRepository().isAuthenticated;
+    final hasSavedCredentials = await SecureStorageService.hasSavedCredentials;
+    await minimumDisplay;
 
     if (!mounted) return;
 
-    final isAuthenticated = AuthRepository().isAuthenticated;
-
     if (isAuthenticated) {
       context.go('/home');
+    } else if (hasSavedCredentials) {
+      context.go('/login');
     } else {
       context.go('/auth');
     }
@@ -60,9 +68,9 @@ class _SplashPageState extends State<SplashPage> {
             Text(
               "Your films. Your archives.",
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'LibreBaskerville',
-                fontSize: 16,
+              style: GoogleFonts.ebGaramond(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
                 fontStyle: FontStyle.italic,
                 color: sloganColor,
               ),
@@ -86,17 +94,20 @@ class _SplashPageState extends State<SplashPage> {
                       Text(
                         "影迹",
                         style: TextStyle(
-                          fontFamily: 'FangZheng',
-                          fontSize: 24,
-                          color: isDark ? Colors.white : const Color.fromARGB(255, 108, 114, 128),
+                          fontFamily: 'HanSerifSC',
+                          fontSize: 20,
+                          color: isDark
+                              ? Colors.white
+                              : const Color.fromARGB(255, 108, 114, 128),
                           height: 1.0,
                         ),
                       ),
                       Text(
                         "Epilog",
-                        style: TextStyle(
-                          fontFamily: 'LibreBaskerville',
-                          fontSize: 14,
+                        style: GoogleFonts.ebGaramond(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          fontStyle: FontStyle.italic,
                           color: subtitleColor,
                           height: 1.0,
                         ),

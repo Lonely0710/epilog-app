@@ -1,21 +1,23 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:lottie/lottie.dart';
 
 /// A reusable widget for displaying empty or error states.
 /// Uses the app's theme colors for consistency.
-class EmptyStateWidget extends StatelessWidget {
+class EmptyStateWidget extends StatefulWidget {
   const EmptyStateWidget({
     super.key,
-    required this.message,
+    this.message = '暂无内容',
     this.icon,
     this.lottieAsset,
     this.svgAsset,
-    this.actionLabel = '重试',
+    this.actionLabel = '刷新',
     this.onAction,
   });
 
-  /// Main message to display (e.g., "暂无数据", "暂无相关影视推荐")
+  /// Main message to display.
   final String message;
 
   /// Optional icon to display above the message
@@ -27,16 +29,31 @@ class EmptyStateWidget extends StatelessWidget {
   /// Optional SVG asset path (takes precedence over icon, but after Lottie)
   final String? svgAsset;
 
-  /// Label for the action button (default: "重试")
+  /// Label for the action button (default: "刷新")
   final String actionLabel;
 
   /// Callback for the action button. If null, no button is shown.
   final VoidCallback? onAction;
 
   @override
+  State<EmptyStateWidget> createState() => _EmptyStateWidgetState();
+}
+
+class _EmptyStateWidgetState extends State<EmptyStateWidget> {
+  static const _defaultSvgAssets = [
+    'assets/images/empty_loading.svg',
+    'assets/images/search_empty.svg',
+  ];
+
+  late final String _randomSvgAsset =
+      _defaultSvgAssets[Random().nextInt(_defaultSvgAssets.length)];
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final primaryColor = theme.colorScheme.primary;
+    final svgAsset = widget.svgAsset ?? _randomSvgAsset;
+    final action = widget.onAction;
 
     return Center(
       child: Padding(
@@ -44,58 +61,49 @@ class EmptyStateWidget extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Visual element (Lottie only)
-            if (lottieAsset != null)
+            if (widget.lottieAsset != null)
               Lottie.asset(
-                lottieAsset!,
+                widget.lottieAsset!,
                 width: 150,
                 height: 150,
                 repeat: true,
               )
-            else if (svgAsset != null)
+            else
               SvgPicture.asset(
-                svgAsset!,
+                svgAsset,
                 width: 150,
                 height: 150,
               ),
-
-            if (lottieAsset != null || svgAsset != null)
-              const SizedBox(height: 24),
-
-            // Message
+            const SizedBox(height: 24),
             Text(
-              message,
+              widget.message,
               style: theme.textTheme.bodyLarge?.copyWith(
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                 fontWeight: FontWeight.w500,
               ),
               textAlign: TextAlign.center,
             ),
-
-            // Action button
-            if (onAction != null) ...[
+            if (action != null) ...[
               const SizedBox(height: 24),
-              SizedBox(
-                width: 100,
-                child: ElevatedButton.icon(
-                  onPressed: onAction,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    foregroundColor: theme.colorScheme.onPrimary,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    elevation: 4,
-                    shadowColor: primaryColor.withValues(alpha: 0.4),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
+              FilledButton.icon(
+                onPressed: action,
+                style: FilledButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  foregroundColor: theme.colorScheme.onPrimary,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 12,
                   ),
-                  icon: const Icon(Icons.refresh_rounded, size: 20),
-                  label: Text(
-                    actionLabel,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+                icon: const Icon(Icons.refresh_rounded, size: 20),
+                label: Text(
+                  widget.actionLabel,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),

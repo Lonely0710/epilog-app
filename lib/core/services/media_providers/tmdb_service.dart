@@ -1,5 +1,6 @@
 import 'dart:developer';
 import 'dart:convert';
+import '../../domain/entities/character.dart';
 import '../../services/convex_service.dart';
 import '../../domain/entities/media.dart';
 import '../../data/models/tmdb_model.dart';
@@ -13,7 +14,8 @@ class TmdbService {
         'language': 'zh-CN',
         'include_adult': 'false',
       },
-      filter: (item) => item['media_type'] == 'movie' || item['media_type'] == 'tv',
+      filter: (item) =>
+          item['media_type'] == 'movie' || item['media_type'] == 'tv',
       limit: 8,
       fetchDetails: true,
     );
@@ -105,7 +107,14 @@ class TmdbService {
     return '$path?$queryString';
   }
 
-  /// Core method to call Supabase Edge Function
+  Map<String, dynamic> _decodeActionMap(dynamic response) {
+    if (response is String) {
+      return jsonDecode(response) as Map<String, dynamic>;
+    }
+    return Map<String, dynamic>.from(response as Map);
+  }
+
+  /// Core method to call the Convex TMDB proxy action.
   Future<List<Media>> _invokeProxyList({
     required String path,
     Map<String, String>? query,
@@ -126,7 +135,7 @@ class TmdbService {
         },
       );
 
-      final data = jsonDecode(response);
+      final data = _decodeActionMap(response);
 
       if (data['results'] == null) {
         log('TMDb Proxy Error: No results found in response');
@@ -169,6 +178,74 @@ class TmdbService {
     return _fetchDetailViaProxy({'id': id, 'media_type': type});
   }
 
+  Future<List<Character>> getPeople(String id, String type) async {
+    try {
+      final path =
+          type == 'tv' ? '/tv/$id/aggregate_credits' : '/movie/$id/credits';
+      final response = await ConvexService.instance.client.action(
+        name: 'tmdbProxy:proxy',
+        args: {
+          'path': path,
+          'query': {'language': 'zh-CN'},
+        },
+      );
+
+      final credits = _decodeActionMap(response);
+      if (credits['cast'] is! List) return [];
+
+      return (credits['cast'] as List)
+          .take(12)
+          .map((item) {
+            final map = Map<String, dynamic>.from(item as Map);
+            final profilePath = map['profile_path']?.toString();
+            final role = type == 'tv'
+                ? _parseTvRoleNames(map['roles'])
+                : map['character']?.toString() ?? '';
+            final actorName = map['name']?.toString() ?? '';
+            return Character(
+              name: actorName,
+              imageUrl: profilePath == null || profilePath.isEmpty
+                  ? ''
+                  : 'https://image.tmdb.org/t/p/w185$profilePath',
+              role: role,
+              source: 'tmdb',
+              episodeCount:
+                  type == 'tv' ? _parseTvEpisodeCount(map['roles']) : null,
+            );
+          })
+          .where((person) => person.name.isNotEmpty)
+          .toList();
+    } catch (e) {
+      log('TMDb people fetch error: $e');
+      return [];
+    }
+  }
+
+  String _parseTvRoleNames(dynamic roles) {
+    if (roles is! List || roles.isEmpty) return '';
+    final names = roles
+        .map((role) => role is Map ? role['character']?.toString() ?? '' : '')
+        .where((name) => name.isNotEmpty)
+        .take(2)
+        .toList();
+    return names.join(' / ');
+  }
+
+  int? _parseTvEpisodeCount(dynamic roles) {
+    if (roles is! List || roles.isEmpty) return null;
+    var total = 0;
+    for (final role in roles) {
+      if (role is! Map) continue;
+      final count = role['episode_count'];
+      if (count is int) {
+        total += count;
+      } else if (count is num) {
+        total += count.toInt();
+      }
+    }
+    return total > 0 ? total : null;
+  }
+
   Future<Media?> _fetchDetailViaProxy(Map<String, dynamic> item) async {
     try {
       final mediaType = item['media_type'];
@@ -200,9 +277,7 @@ class TmdbService {
         },
       );
 
-      // Convex action returns a JSON string, decode it
-      // log('TMDb Detail Fetch: Raw response type: ${response.runtimeType}');
-      final detailData = jsonDecode(response) as Map<String, dynamic>;
+      final detailData = _decodeActionMap(response);
 
       // log('TMDb Detail Fetch: Response keys: ${detailData.keys.toList()}');
 

@@ -62,7 +62,7 @@ class ExploreSection extends StatelessWidget {
         }
         return 'https://www.themoviedb.org/$mediaType/$id';
       case SiteType.bangumi:
-        return 'https://chii.in/subject/$id';
+        return 'https://bangumi.tv/subject/$id';
       case SiteType.maoyan:
         return 'https://m.maoyan.com/movie/$id';
       case SiteType.other:
@@ -114,7 +114,8 @@ class ExploreSection extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primary,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
                 elevation: 4,
                 shadowColor: AppTheme.primary.withValues(alpha: 0.4),
                 shape: RoundedRectangleBorder(

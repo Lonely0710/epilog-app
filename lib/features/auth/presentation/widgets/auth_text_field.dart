@@ -8,6 +8,7 @@ class AuthTextField extends StatefulWidget {
   final bool isPassword;
   final TextInputType keyboardType;
   final ValueChanged<String>? onChanged;
+  final bool hasError;
 
   const AuthTextField({
     super.key,
@@ -17,6 +18,7 @@ class AuthTextField extends StatefulWidget {
     this.isPassword = false,
     this.keyboardType = TextInputType.text,
     this.onChanged,
+    this.hasError = false,
   });
 
   @override
@@ -57,15 +59,22 @@ class _AuthTextFieldState extends State<AuthTextField> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Determine background color: Grey when inactive, Light Primary when focused.
-    final fillColor = _isFocused
-        ? AppTheme.primary.withAlpha(30) // ~12% opacity, lighter theme color
-        : (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.grey.shade100);
+    final fillColor = widget.hasError
+        ? AppTheme.error.withAlpha(isDark ? 32 : 18)
+        : (_isFocused
+            ? AppTheme.primary
+                .withAlpha(30) // ~12% opacity, lighter theme color
+            : (isDark
+                ? Colors.white.withValues(alpha: 0.1)
+                : Colors.grey.shade100));
 
-    final iconColor = _isFocused
-        ? AppTheme.primary
-        : (widget.controller.text.isNotEmpty
-            ? (isDark ? Colors.white70 : Colors.black87)
-            : Colors.grey);
+    final iconColor = widget.hasError
+        ? AppTheme.error
+        : _isFocused
+            ? AppTheme.primary
+            : (widget.controller.text.isNotEmpty
+                ? (isDark ? Colors.white70 : Colors.black87)
+                : Colors.grey);
 
     final textColor = isDark ? Colors.white : AppTheme.textPrimary;
     final hintColor = isDark ? Colors.grey.shade500 : Colors.grey;
@@ -91,15 +100,20 @@ class _AuthTextFieldState extends State<AuthTextField> {
         ),
         filled: true,
         fillColor: fillColor,
-        // No border when not focused, theme color border when focused
+        // No border when not focused, theme color border when focused.
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
+          borderSide: widget.hasError
+              ? const BorderSide(
+                  color: AppTheme.error,
+                  width: 1.5,
+                )
+              : BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: AppTheme.primary,
+          borderSide: BorderSide(
+            color: widget.hasError ? AppTheme.error : AppTheme.primary,
             width: 1.5,
           ),
         ),

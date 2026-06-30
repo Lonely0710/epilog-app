@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/presentation/pages/web_browser_page.dart';
 import '../../../../core/domain/entities/media.dart';
+import '../../../../core/presentation/widgets/app_dialog.dart';
 import '../../../../core/presentation/widgets/shared_dialog_button.dart';
 
 class DailyRowWidget extends StatelessWidget {
@@ -18,27 +19,30 @@ class DailyRowWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isToday = _isToday(dayKey);
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
-      height: 190,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Day Header
-          _buildDayHeader(context),
+          _buildDayHeader(context, isToday: isToday),
 
           const SizedBox(width: 8),
 
           // Anime List
           Expanded(
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: animeList.length,
-              separatorBuilder: (context, index) => const SizedBox(width: 12),
-              itemBuilder: (context, index) {
-                final anime = animeList[index];
-                return _buildAnimeItem(context, anime);
-              },
+            child: SizedBox(
+              height: 190,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: animeList.length,
+                separatorBuilder: (context, index) => const SizedBox(width: 12),
+                itemBuilder: (context, index) {
+                  final anime = animeList[index];
+                  return _buildAnimeItem(context, anime);
+                },
+              ),
             ),
           ),
         ],
@@ -46,7 +50,7 @@ class DailyRowWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildDayHeader(BuildContext context) {
+  Widget _buildDayHeader(BuildContext context, {required bool isToday}) {
     String assetName;
     String label = '';
     String subLabel = ''; // e.g., 曜日
@@ -138,7 +142,7 @@ class DailyRowWidget extends StatelessWidget {
                     TextSpan(
                       text: label,
                       style: TextStyle(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: isToday ? FontWeight.w800 : FontWeight.w400,
                         fontSize: 13,
                         color: _getDayColor(dayKey),
                       ),
@@ -158,7 +162,10 @@ class DailyRowWidget extends StatelessWidget {
                 text: TextSpan(
                   style: TextStyle(
                     fontSize: 10,
-                    color: Theme.of(context).textTheme.bodySmall?.color, // Base color for "共" and "部"
+                    color: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.color, // Base color for "共" and "部"
                     fontFamily: 'FangZheng', // Use custom font
                   ),
                   children: [
@@ -168,7 +175,10 @@ class DailyRowWidget extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12, // Larger font for number
                         fontWeight: FontWeight.bold,
-                        color: Theme.of(context).textTheme.bodyMedium?.color, // Darker color for number
+                        color: Theme.of(context)
+                            .textTheme
+                            .bodyMedium
+                            ?.color, // Darker color for number
                       ),
                     ),
                     const TextSpan(text: ' 部'),
@@ -182,10 +192,14 @@ class DailyRowWidget extends StatelessWidget {
         Container(
           width: 120,
           height: 2,
-          decoration: BoxDecoration(color: Theme.of(context).dividerColor.withValues(alpha: 0.5), boxShadow: [
-            BoxShadow(
-                color: Theme.of(context).shadowColor.withValues(alpha: 0.1), blurRadius: 2, offset: const Offset(0, 1))
-          ]),
+          decoration: BoxDecoration(
+              color: Theme.of(context).dividerColor.withValues(alpha: 0.5),
+              boxShadow: [
+                BoxShadow(
+                    color: Theme.of(context).shadowColor.withValues(alpha: 0.1),
+                    blurRadius: 2,
+                    offset: const Offset(0, 1))
+              ]),
         )
       ],
     );
@@ -210,6 +224,12 @@ class DailyRowWidget extends StatelessWidget {
       default:
         return AppColors.textPrimary;
     }
+  }
+
+  bool _isToday(String key) {
+    const orderedKeys = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final todayKey = orderedKeys[DateTime.now().weekday - 1];
+    return key == todayKey;
   }
 
   Widget _buildAnimeItem(BuildContext context, Media anime) {
@@ -240,7 +260,9 @@ class DailyRowWidget extends StatelessWidget {
                   fit: BoxFit.cover,
                   placeholder: (context, url) => Container(
                     color: AppColors.surfaceVariant,
-                    child: Center(child: Icon(Icons.image, size: 20, color: AppColors.textTertiary)),
+                    child: Center(
+                        child: Icon(Icons.image,
+                            size: 20, color: AppColors.textTertiary)),
                   ),
                   errorWidget: (context, url, error) => Image.asset(
                     'assets/icons/ic_np_poster.png',
@@ -261,7 +283,9 @@ class DailyRowWidget extends StatelessWidget {
                       begin: Alignment.bottomCenter,
                       end: Alignment.topCenter,
                       colors: [
-                        Colors.black.withValues(alpha: 0.8), // Keep black for readability over image
+                        Colors.black.withValues(
+                            alpha:
+                                0.8), // Keep black for readability over image
                         Colors.transparent,
                       ],
                     ),
@@ -327,134 +351,103 @@ class DailyRowWidget extends StatelessWidget {
       context: context,
       builder: (context) {
         final today = DateTime.now();
-        // Calculate index: Sunday=0 ... Saturday=6
-        // DateTime.weekday returns 1 for Mon, 7 for Sun.
-        // We want Sunday to be 0 (1st item).
-        final index = today.weekday % 7;
+        final musumeIndex = today.weekday % 7;
+        final alignX = -1.0 + (musumeIndex / 3.0);
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final textColor =
+            Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black;
+        final title =
+            anime.titleZh.isNotEmpty ? anime.titleZh : anime.titleOriginal;
 
-        return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          backgroundColor: Theme.of(context).cardColor,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+        return AppDialog(
+          title: '正在前往',
+          contentAlignment: CrossAxisAlignment.center,
+          content: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // Header Image with Day-based Crop (Logo)
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                child: SizedBox(
-                  height: 60, // Smaller header
-                  width: double.infinity,
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return Padding(
-                        padding: const EdgeInsets.all(12.0),
+              Expanded(
+                child: Transform.translate(
+                  offset: const Offset(0, -14),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Center(
                         child: Image.asset(
                           'assets/images/bg_logo_riff.png',
-                          fit: BoxFit.contain, // Show full logo
+                          height: 38,
+                          fit: BoxFit.contain,
+                          color: isDark ? null : AppColors.sourceBangumi,
+                          colorBlendMode: isDark ? null : BlendMode.srcIn,
                           errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: AppColors.surfaceVariant,
-                              child: Center(
-                                child: Icon(Icons.image_not_supported, color: AppColors.textTertiary),
+                            return Text(
+                              'Bangumi',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: AppColors.sourceBangumi,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0,
                               ),
                             );
                           },
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        title,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: textColor,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                          height: 1.25,
+                          letterSpacing: 0,
+                          fontFamily: 'FangZheng',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 50,
+                height: 100,
+                child: ClipRect(
+                  child: Image.asset(
+                    'assets/images/bg_musume.png',
+                    fit: BoxFit.cover,
+                    alignment: Alignment(alignX, 0.0),
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Center(
+                        child: Icon(
+                          Icons.person_rounded,
+                          color: AppColors.textTertiary,
                         ),
                       );
                     },
                   ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 10, 20, 24), // 调整 top (10) 可以控制整体上移程度
-                child: Column(
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center, // Vertically center alignment
-                      children: [
-                        // Left: Character Image (Musume)
-                        SizedBox(
-                          width: 50, // Narrower to hide neighbors
-                          height: 100,
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              // Alignment logic for 7 items (Same as logo)
-                              final alignX = -1.0 + (index / 3.0);
-                              return Container(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
-                                  // color: Colors.grey[100],
-                                ),
-                                clipBehavior: Clip.antiAlias,
-                                child: Image.asset(
-                                  'assets/images/bg_musume.png',
-                                  fit: BoxFit.cover,
-                                  alignment: Alignment(alignX, 0.0),
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return const Center(child: Icon(Icons.person, color: AppColors.textTertiary));
-                                  },
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        // Right: Text Content
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center, // Horizontal Center
-                            mainAxisAlignment: MainAxisAlignment.start, // Vertical Top
-                            children: [
-                              Text(
-                                'Bangumi 番组计划',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: Theme.of(context).textTheme.bodyLarge?.color,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                '是否要前往 Bangumi 对应动漫？',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Theme.of(context).textTheme.bodyMedium?.color,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 32),
-                    Row(
-                      children: [
-                        SharedDialogButton(
-                          text: '留在本页',
-                          icon: Icons.close,
-                          isPrimary: false,
-                          onTap: () => Navigator.pop(context),
-                          color: AppColors.textSecondary,
-                        ),
-                        const SizedBox(width: 16),
-                        SharedDialogButton(
-                          text: '前往',
-                          icon: Icons.open_in_new_rounded,
-                          isPrimary: true,
-                          color: AppColors.sourceBangumi,
-                          onTap: () {
-                            Navigator.pop(context);
-                            _launchBangumi(context, anime);
-                          },
-                        ),
-                      ],
-                    )
-                  ],
-                ),
-              ),
             ],
+          ),
+          secondaryAction: AppDialogAction(
+            text: '留在本页',
+            color: AppColors.textSecondary,
+            variant: SharedDialogButtonVariant.secondary,
+            onPressed: () => Navigator.pop(context),
+          ),
+          primaryAction: AppDialogAction(
+            text: '确认',
+            color: AppColors.sourceBangumi,
+            variant: SharedDialogButtonVariant.primary,
+            onPressed: () {
+              Navigator.pop(context);
+              _launchBangumi(context, anime);
+            },
           ),
         );
       },
@@ -463,7 +456,7 @@ class DailyRowWidget extends StatelessWidget {
 
   void _launchBangumi(BuildContext context, Media anime) {
     // User requested specific URL format for Bangumi items
-    final url = 'https://chii.in/subject/${anime.sourceId}';
+    final url = 'https://bangumi.tv/subject/${anime.sourceId}';
 
     final args = WebBrowserPageArgs.fromSiteType(
       siteType: SiteType.bangumi,

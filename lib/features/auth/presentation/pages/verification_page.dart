@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/theme/app_theme.dart';
 import '../../../../core/presentation/widgets/app_snack_bar.dart';
+import '../../../../core/services/auth_bridge.dart';
 import '../../data/auth_repository.dart';
 import '../widgets/verification_message_dialog.dart';
 import '../../../../app/animations/dialog_animations.dart';
@@ -22,7 +23,8 @@ class VerificationPage extends StatefulWidget {
 class _VerificationPageState extends State<VerificationPage> {
   final _authRepository = AuthRepository();
   // Clerk defaults to 6 digits
-  final List<TextEditingController> _controllers = List.generate(6, (_) => TextEditingController());
+  final List<TextEditingController> _controllers =
+      List.generate(6, (_) => TextEditingController());
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
 
   // Timer state
@@ -97,6 +99,9 @@ class _VerificationPageState extends State<VerificationPage> {
         email: widget.email,
         token: code,
       );
+      if (mounted) {
+        await AuthBridge.syncProfileFromContext(context);
+      }
 
       if (mounted) {
         // Assuming success if no error was thrown
@@ -118,9 +123,12 @@ class _VerificationPageState extends State<VerificationPage> {
     } catch (e) {
       if (mounted) {
         // Handle generic errors (like HandshakeException) with a user-friendly message
-        final errorMessage = e.toString().contains('HandshakeException') || e.toString().contains('SocketException')
+        final errorMessage = e.toString().contains('HandshakeException') ||
+                e.toString().contains('SocketException')
             ? '网络连接失败，请检查网络设置'
-            : (e.toString().contains('AuthException') ? "验证失败: ${e.toString()}" : '验证码无效，请重试');
+            : (e.toString().contains('AuthException')
+                ? "验证失败: ${e.toString()}"
+                : '验证码无效，请重试');
 
         await showAnimatedDialog(
           context: context,
@@ -154,7 +162,8 @@ class _VerificationPageState extends State<VerificationPage> {
     final iconColor = isDark ? Colors.white : Colors.black;
     final titleColor = isDark ? Colors.white : Colors.black;
     final inputFillColor = isDark ? Colors.grey.shade800 : Colors.white;
-    final inputBorderColor = isDark ? Colors.grey.shade700 : Colors.grey.shade200;
+    final inputBorderColor =
+        isDark ? Colors.grey.shade700 : Colors.grey.shade200;
     final textColor = isDark ? Colors.white : AppTheme.textPrimary;
 
     return Scaffold(

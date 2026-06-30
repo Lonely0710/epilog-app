@@ -1,14 +1,19 @@
 import 'dart:developer';
 import 'dart:async';
-import 'dart:math' hide log;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_lucide_animated/flutter_lucide_animated.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/domain/entities/media.dart';
+import '../../../../core/presentation/widgets/app_dialog.dart';
+import '../../../../core/presentation/widgets/empty_state_widget.dart';
+import '../../../../core/presentation/widgets/shared_dialog_button.dart';
 import '../../domain/repositories/search_repository.dart';
 import '../widgets/search_result_item.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:drama_tracker_flutter/features/search/data/datasources/search_history_service.dart';
 import '../../domain/entities/search_history_item.dart';
-import '../../../../app/theme/app_theme.dart';
+import '../../../../app/theme/app_colors.dart';
 
 class SearchPage extends StatefulWidget {
   final String initialQuery;
@@ -27,6 +32,9 @@ class SearchPage extends StatefulWidget {
 }
 
 class _SearchPageState extends State<SearchPage> {
+  static const double _historyPreviewWidth = 9;
+  static const List<String> _filterTabs = ['全部', '动漫', '电视剧', '电影'];
+
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   final SearchRepository _searchRepository = SearchRepository();
@@ -38,18 +46,17 @@ class _SearchPageState extends State<SearchPage> {
   String _lastSearchedQuery = '';
   List<SearchHistoryItem> _history = [];
   Timer? _debounce;
-  bool _isFocused = false;
+  int _selectedFilterIndex = 0;
+  bool _isGalleryView = true;
+  final LucideAnimatedIconController _deleteIconController =
+      LucideAnimatedIconController();
 
   @override
   void initState() {
     super.initState();
+    _selectedFilterIndex = _initialFilterIndex();
     _loadHistory();
     _searchController.text = widget.initialQuery;
-    _searchFocusNode.addListener(() {
-      setState(() {
-        _isFocused = _searchFocusNode.hasFocus;
-      });
-    });
     if (widget.autoSearch && widget.initialQuery.isNotEmpty) {
       _performSearch(widget.initialQuery);
     }
@@ -68,12 +75,15 @@ class _SearchPageState extends State<SearchPage> {
   void dispose() {
     _searchController.dispose();
     _searchFocusNode.dispose();
+    _deleteIconController.dispose();
     _debounce?.cancel();
     super.dispose();
   }
 
   void _onSearchChanged(String query) {
-    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    if (_debounce?.isActive ?? false) {
+      _debounce!.cancel();
+    }
     _debounce = Timer(const Duration(milliseconds: 1000), () {
       if (query.isNotEmpty && query != _lastSearchedQuery) {
         _performSearch(query);
@@ -82,11 +92,43 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   void _onSearchSubmitted(String query) {
-    if (_debounce?.isActive ?? false) _debounce!.cancel(); // Cancel pending debounce
+    if (_debounce?.isActive ?? false) {
+      _debounce!.cancel(); // Cancel pending debounce
+    }
     _searchFocusNode.unfocus(); // Dismiss keyboard
     if (query.isNotEmpty) {
       _performSearch(query, force: true);
     }
+  }
+
+  int _initialFilterIndex() {
+    return switch (widget.searchType) {
+      'anime' => 1,
+      'tv' => 2,
+      'movie' => 3,
+      _ => 0,
+    };
+  }
+
+  void _handleFilterSelected(int index) {
+    if (index == _selectedFilterIndex) return;
+
+    setState(() => _selectedFilterIndex = index);
+
+    final query = _searchController.text.trim();
+    if (query.isNotEmpty) {
+      _performSearch(query, force: true);
+    }
+  }
+
+  void _clearSearchInput() {
+    _searchController.clear();
+    _debounce?.cancel();
+    setState(() {
+      _results = [];
+      _errorMessage = '';
+      _lastSearchedQuery = '';
+    });
   }
 
   Future<void> _performSearch(String query, {bool force = false}) async {
@@ -101,32 +143,19 @@ class _SearchPageState extends State<SearchPage> {
     });
 
     try {
-      // Aggregated Search based on searchType
-      // 'movie': TMDb, Maoyan, (and Douban if available via repository)
-      // 'anime': Bangumi (searchAnime)
-
-      List<Future<List<Media>>> searchFutures = [];
-
-      if (widget.searchType == 'movie') {
-        // Search Movies/TV (TMDb, Maoyan, etc.)
-        searchFutures.add(_searchRepository.searchMovie(query));
-      } else if (widget.searchType == 'anime') {
-        // Search Anime (Bangumi)
-        searchFutures.add(_searchRepository.searchAnime(query));
-      } else {
-        // For 'all' or any other type, search all sources
-        searchFutures.add(_searchRepository.searchAll(query));
-      }
-
-      final results = await Future.wait(searchFutures);
+      final selectedFilterIndex = _selectedFilterIndex;
+      final results = await _searchByFilter(query, selectedFilterIndex);
 
       if (!mounted) return;
-
-      final combinedResults = results.expand((element) => element).toList();
+      if (selectedFilterIndex != _selectedFilterIndex ||
+          query != _lastSearchedQuery) {
+        return;
+      }
 
       // Save to history (Non-blocking)
       try {
-        await _historyService.addHistory(query, 'mixed'); // Use 'mixed' or keep existing types
+        await _historyService.addHistory(
+            query, 'mixed'); // Use 'mixed' or keep existing types
         if (mounted) {
           await _loadHistory();
         }
@@ -137,7 +166,7 @@ class _SearchPageState extends State<SearchPage> {
       if (!mounted) return;
 
       setState(() {
-        _results = combinedResults;
+        _results = results;
         _isLoading = false;
       });
     } catch (e) {
@@ -149,148 +178,459 @@ class _SearchPageState extends State<SearchPage> {
     }
   }
 
+  Future<List<Media>> _searchByFilter(String query, int filterIndex) async {
+    switch (filterIndex) {
+      case 1:
+        return _searchRepository.searchAnime(query);
+      case 2:
+        final results = await _searchRepository.searchMovie(query);
+        return results.where((item) => item.mediaType == 'tv').toList();
+      case 3:
+        final results = await _searchRepository.searchMovie(query);
+        return results.where((item) => item.mediaType == 'movie').toList();
+      default:
+        return _searchRepository.searchAll(query);
+    }
+  }
+
+  Future<void> _confirmClearHistory() async {
+    if (_history.isEmpty) return;
+
+    _deleteIconController.animate();
+    HapticFeedback.selectionClick();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      builder: (dialogContext) {
+        final textColor =
+            Theme.of(dialogContext).textTheme.bodyLarge?.color ?? Colors.black;
+
+        return AppDialog(
+          title: '删除历史记录',
+          content: Text(
+            '确认删除全部搜索历史吗？',
+            textAlign: TextAlign.start,
+            style: TextStyle(
+              fontSize: 15,
+              color: textColor.withValues(alpha: 0.72),
+              height: 1.5,
+              letterSpacing: 0,
+            ),
+          ),
+          secondaryAction: AppDialogAction(
+            text: '取消',
+            variant: SharedDialogButtonVariant.secondary,
+            onPressed: () => Navigator.pop(dialogContext, false),
+          ),
+          primaryAction: AppDialogAction(
+            text: '删除',
+            variant: SharedDialogButtonVariant.destructive,
+            onPressed: () => Navigator.pop(dialogContext, true),
+          ),
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    await _historyService.clearHistory();
+    await _loadHistory();
+  }
+
+  Future<void> _deleteHistoryItem(SearchHistoryItem item) async {
+    HapticFeedback.selectionClick();
+    await _historyService.deleteHistoryItem(item.query);
+    await _loadHistory();
+  }
+
+  String _truncateHistoryQuery(String query) {
+    const ellipsis = '...';
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return trimmed;
+
+    var width = 0.0;
+    final buffer = StringBuffer();
+
+    for (final rune in trimmed.runes) {
+      final char = String.fromCharCode(rune);
+      final charWidth = rune <= 0x007F ? 0.5 : 1.0;
+      if (width + charWidth > _historyPreviewWidth) {
+        return '${buffer.toString()}$ellipsis';
+      }
+      buffer.write(char);
+      width += charWidth;
+    }
+
+    return trimmed;
+  }
+
+  String _filterTabIconPath(int index) {
+    return switch (index) {
+      0 => 'assets/icons/funnel-simple-bold.svg',
+      1 => 'assets/icons/cactus-bold.svg',
+      2 => 'assets/icons/monitor-play-bold.svg',
+      3 => 'assets/icons/popcorn-bold.svg',
+      _ => 'assets/icons/funnel-simple-bold.svg',
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final scaffoldBg = Theme.of(context).scaffoldBackgroundColor;
-    final textColor = isDark ? Colors.white : AppTheme.textPrimary;
-    final hintColor = isDark ? Colors.grey.shade500 : Colors.grey;
-
-    // AuthTextField-style: Dynamic styling based on focus
-    final fillColor = _isFocused
-        ? AppTheme.primary.withAlpha(30) // ~12% opacity, lighter theme color
-        : (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.grey.shade100);
-
-    final iconColor = _isFocused
-        ? AppTheme.primary
-        : (_searchController.text.isNotEmpty ? (isDark ? Colors.white70 : Colors.black87) : Colors.grey);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final scaffoldBg =
+        isDark ? AppColors.backgroundDark : const Color(0xFFFFFFFF);
+    final textColor = isDark ? Colors.white : AppColors.textPrimary;
+    final showResultToolbar = _searchController.text.isNotEmpty ||
+        _results.isNotEmpty ||
+        _isLoading ||
+        _errorMessage.isNotEmpty;
 
     return Scaffold(
       backgroundColor: scaffoldBg,
-      appBar: AppBar(
-        titleSpacing: 0,
-        backgroundColor: scaffoldBg,
-        elevation: 0,
-        title: Text('搜索', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
-        leading: IconButton(
-          icon: Icon(Icons.close, color: isDark ? Colors.grey[400] : Colors.grey),
-          onPressed: () => Navigator.of(context).pop(),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildSearchHeader(context, textColor),
+            if (showResultToolbar) _buildResultToolbar(context, textColor),
+            Expanded(
+              child: _isLoading
+                  ? Center(
+                      child: CircularProgressIndicator(
+                        color: theme.colorScheme.primary,
+                      ),
+                    )
+                  : _errorMessage.isNotEmpty
+                      ? Center(
+                          child: Text(
+                            _errorMessage,
+                            style: TextStyle(color: textColor),
+                          ),
+                        )
+                      : (_results.isEmpty && _searchController.text.isEmpty)
+                          ? _buildHistorySection(context)
+                          : _results.isEmpty
+                              ? _buildEmptyState(context)
+                              : _buildResultsView(context),
+            ),
+          ],
         ),
       ),
-      body: Column(
+    );
+  }
+
+  Widget _buildResultsView(BuildContext context) {
+    final bottomPadding = MediaQuery.paddingOf(context).bottom + 32;
+
+    if (_isGalleryView) {
+      return GridView.builder(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPadding),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 14,
+          mainAxisSpacing: 16,
+          childAspectRatio: 0.42,
+        ),
+        itemCount: _results.length,
+        itemBuilder: (context, index) {
+          return SearchGalleryResultItem(
+            result: _results[index],
+            searchType: widget.searchType,
+          );
+        },
+      );
+    }
+
+    return ListView.builder(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: EdgeInsets.only(top: 10, bottom: bottomPadding),
+      itemCount: _results.length,
+      itemBuilder: (context, index) {
+        return SearchResultItem(
+          result: _results[index],
+          searchType: widget.searchType,
+        );
+      },
+    );
+  }
+
+  Widget _buildSearchHeader(BuildContext context, Color textColor) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final borderColor = isDark
+        ? Colors.white.withValues(alpha: 0.12)
+        : Colors.black.withValues(alpha: 0.08);
+    final fieldColor =
+        isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white;
+    final hintColor = isDark
+        ? Colors.white.withValues(alpha: 0.42)
+        : AppColors.textSecondary.withValues(alpha: 0.64);
+    final dividerColor = isDark
+        ? Colors.white.withValues(alpha: 0.16)
+        : Colors.black.withValues(alpha: 0.08);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 20, 8),
+      child: Row(
         children: [
-          // Search Bar Area - Matching AuthTextField style exactly
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            child: TextField(
-              controller: _searchController,
-              focusNode: _searchFocusNode,
-              textInputAction: TextInputAction.search,
-              autofocus: true,
-              cursorColor: AppTheme.primary,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 15,
+          SizedBox(
+            width: 44,
+            height: 50,
+            child: IconButton(
+              padding: EdgeInsets.zero,
+              icon: Icon(
+                Icons.arrow_back_ios_new_rounded,
                 color: textColor,
+                size: 26,
               ),
-              onSubmitted: (value) {
-                _onSearchSubmitted(value);
-              },
-              decoration: InputDecoration(
-                hintText: '请输入剧目名称',
-                hintStyle: TextStyle(
-                  color: hintColor,
-                  fontSize: 14,
-                  fontWeight: FontWeight.normal,
-                ),
-                filled: true,
-                fillColor: fillColor,
-                // No border when not focused, theme color border when focused
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(
-                    color: AppTheme.primary,
-                    width: 1.5,
-                  ),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  vertical: 16,
-                  horizontal: 16,
-                ),
-                prefixIcon: Icon(
-                  Icons.search,
-                  color: iconColor,
-                  size: 22,
-                ),
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? (_searchController.text != _lastSearchedQuery
-                        ? IconButton(
-                            icon: Icon(Icons.check_circle, size: 20, color: AppTheme.primary),
-                            onPressed: () {
-                              _onSearchSubmitted(_searchController.text);
-                            },
-                          )
-                        : IconButton(
-                            icon: Icon(Icons.delete, size: 20, color: iconColor),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() {
-                                _results = [];
-                                _errorMessage = '';
-                                _lastSearchedQuery = '';
-                              });
-                              // Cancel any pending debounce
-                              _debounce?.cancel();
-                            },
-                          ))
-                    : null,
-              ),
-              onChanged: (text) {
-                setState(() {}); // trigger rebuild to show/hide clear button
-                _onSearchChanged(text);
-              },
+              onPressed: () => context.pop(),
             ),
           ),
-
-          // Content Area
+          const SizedBox(width: 4),
           Expanded(
-            child: _isLoading
-                ? Center(child: CircularProgressIndicator(color: AppTheme.primary))
-                : _errorMessage.isNotEmpty
-                    ? Center(child: Text(_errorMessage, style: TextStyle(color: textColor)))
-                    : (_results.isEmpty &&
-                            _searchController.text.isEmpty) // Show history when no results and input empty
-                        ? _buildHistorySection(context)
-                        : _results.isEmpty
-                            ? _buildEmptyState(context)
-                            : ListView.builder(
-                                itemCount: _results.length,
-                                itemBuilder: (context, index) {
-                                  return SearchResultItem(
-                                    result: _results[index],
-                                    searchType: widget.searchType,
-                                  );
-                                },
-                              ),
+            child: Container(
+              height: 50,
+              decoration: BoxDecoration(
+                color: fieldColor,
+                borderRadius: BorderRadius.circular(25),
+                border: Border.all(color: borderColor),
+                boxShadow: isDark
+                    ? null
+                    : [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 16,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      focusNode: _searchFocusNode,
+                      autofocus: true,
+                      textInputAction: TextInputAction.search,
+                      cursorColor: theme.colorScheme.primary,
+                      textAlignVertical: TextAlignVertical.center,
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        height: 1.2,
+                        letterSpacing: 0,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: '输入电视剧、电影、动漫名称',
+                        hintStyle: TextStyle(
+                          color: hintColor,
+                          fontSize: 14,
+                          fontWeight: FontWeight.normal,
+                          letterSpacing: 0,
+                        ),
+                        filled: false,
+                        fillColor: Colors.transparent,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        isCollapsed: true,
+                        contentPadding: const EdgeInsets.fromLTRB(24, 0, 12, 0),
+                      ),
+                      onSubmitted: _onSearchSubmitted,
+                      onChanged: (text) {
+                        setState(() {});
+                        _onSearchChanged(text);
+                      },
+                    ),
+                  ),
+                  if (_searchController.text.isNotEmpty) ...[
+                    IconButton(
+                      tooltip: '清空',
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 34,
+                        height: 50,
+                      ),
+                      icon: Icon(
+                        Icons.cancel_rounded,
+                        size: 20,
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.42)
+                            : AppColors.textSecondary.withValues(alpha: 0.48),
+                      ),
+                      onPressed: _clearSearchInput,
+                    ),
+                    Container(
+                      width: 1,
+                      height: 18,
+                      color: dividerColor,
+                    ),
+                  ],
+                  TextButton(
+                    onPressed: () => _onSearchSubmitted(_searchController.text),
+                    style: TextButton.styleFrom(
+                      foregroundColor: textColor,
+                      minimumSize: const Size(70, 50),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                    ),
+                    child: const Text(
+                      '搜索',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
+  Widget _buildResultToolbar(BuildContext context, Color textColor) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final inactiveColor = isDark
+        ? Colors.white.withValues(alpha: 0.50)
+        : AppColors.textSecondary.withValues(alpha: 0.72);
+    final dividerColor = isDark
+        ? Colors.white.withValues(alpha: 0.14)
+        : Colors.black.withValues(alpha: 0.08);
+    final primaryColor = theme.colorScheme.primary;
+
+    return SizedBox(
+      height: 42,
+      child: Row(
+        children: [
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.only(left: 38, right: 12),
+              scrollDirection: Axis.horizontal,
+              itemCount: _filterTabs.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 24),
+              itemBuilder: (context, index) {
+                final selected = index == _selectedFilterIndex;
+
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _handleFilterSelected(index),
+                  child: SizedBox(
+                    height: 42,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _filterTabs[index],
+                              style: TextStyle(
+                                color: selected ? textColor : inactiveColor,
+                                fontSize: 15,
+                                fontWeight: selected
+                                    ? FontWeight.w700
+                                    : FontWeight.w600,
+                                letterSpacing: 0,
+                              ),
+                            ),
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 160),
+                              child: selected
+                                  ? Padding(
+                                      key: ValueKey(_filterTabs[index]),
+                                      padding: const EdgeInsets.only(left: 4),
+                                      child: SvgPicture.asset(
+                                        _filterTabIconPath(index),
+                                        width: 15,
+                                        height: 15,
+                                        colorFilter: ColorFilter.mode(
+                                          primaryColor,
+                                          BlendMode.srcIn,
+                                        ),
+                                      ),
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 5),
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          width: selected ? 28 : 0,
+                          height: 3,
+                          decoration: BoxDecoration(
+                            color: primaryColor,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          Container(
+            width: 1,
+            height: 20,
+            color: dividerColor,
+          ),
+          IconButton(
+            tooltip: _isGalleryView ? '列表视图' : '画廊视图',
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 52, height: 42),
+            icon: Icon(
+              _isGalleryView
+                  ? Icons.view_list_rounded
+                  : Icons.grid_view_rounded,
+              color: inactiveColor,
+              size: 22,
+            ),
+            onPressed: () {
+              setState(() => _isGalleryView = !_isGalleryView);
+            },
+          ),
+          const SizedBox(width: 16),
+        ],
+      ),
+    );
+  }
+
   Widget _buildHistorySection(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor = theme.textTheme.bodyLarge?.color ??
+        (isDark ? Colors.white : Colors.black);
+    final chipColor =
+        isDark ? Colors.white.withValues(alpha: 0.06) : Colors.white;
+    final chipBorder = isDark
+        ? Colors.white.withValues(alpha: 0.12)
+        : Colors.black.withValues(alpha: 0.08);
+    final mutedIconColor = isDark
+        ? Colors.white.withValues(alpha: 0.42)
+        : AppColors.textSecondary.withValues(alpha: 0.74);
 
     if (_history.isEmpty) {
       return const SizedBox.shrink();
     }
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: const EdgeInsets.fromLTRB(38, 10, 38, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -298,48 +638,104 @@ class _SearchPageState extends State<SearchPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '搜索历史',
+                '历史记录',
                 style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
                   color: textColor,
+                  letterSpacing: 0,
                 ),
               ),
               IconButton(
-                icon: Icon(Icons.delete_outline, size: 20, color: isDark ? Colors.grey[400] : Colors.grey),
-                onPressed: () async {
-                  await _historyService.clearHistory();
-                  await _loadHistory();
-                },
+                tooltip: '删除历史记录',
+                icon: LucideAnimatedIcon(
+                  icon: delete,
+                  size: 22,
+                  color: mutedIconColor,
+                  trigger: AnimationTrigger.manual,
+                  controller: _deleteIconController,
+                ),
+                onPressed: _confirmClearHistory,
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 14),
           Wrap(
-            spacing: 8.0,
-            runSpacing: 8.0,
+            spacing: 10,
+            runSpacing: 10,
             children: _history.map((item) {
-              return InputChip(
-                backgroundColor: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey[100],
-                elevation: 0,
-                side: isDark ? BorderSide(color: Colors.white.withValues(alpha: 0.1)) : BorderSide.none,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                label: Text(
-                  item.query,
-                  style: TextStyle(color: textColor, fontSize: 13),
-                ),
-                onPressed: () {
-                  _searchController.text = item.query;
-                  _performSearch(item.query);
-                },
-                onDeleted: () async {
-                  await _historyService.deleteHistoryItem(item.query);
-                  await _loadHistory();
-                },
-                deleteIcon: Icon(Icons.close, size: 16, color: isDark ? Colors.grey[400] : Colors.grey),
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(22),
+                      onTap: () {
+                        _searchController.text = item.query;
+                        _performSearch(item.query);
+                      },
+                      child: Container(
+                        constraints: const BoxConstraints(
+                          minHeight: 38,
+                          maxWidth: 190,
+                        ),
+                        padding: const EdgeInsets.fromLTRB(16, 8, 24, 8),
+                        decoration: BoxDecoration(
+                          color: chipColor,
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(color: chipBorder),
+                          boxShadow: isDark
+                              ? null
+                              : [
+                                  BoxShadow(
+                                    color:
+                                        Colors.black.withValues(alpha: 0.035),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                        ),
+                        child: Text(
+                          _truncateHistoryQuery(item.query),
+                          maxLines: 1,
+                          overflow: TextOverflow.clip,
+                          style: TextStyle(
+                            color: textColor,
+                            fontSize: 15,
+                            fontWeight: FontWeight.normal,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: -7,
+                    right: -7,
+                    child: Tooltip(
+                      message: '删除此记录',
+                      child: Material(
+                        color: chipColor,
+                        shape: const CircleBorder(),
+                        elevation: isDark ? 0 : 2,
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: () => _deleteHistoryItem(item),
+                          child: SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: Icon(
+                              Icons.close_rounded,
+                              size: 12,
+                              color: mutedIconColor,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               );
             }).toList(),
           ),
@@ -350,53 +746,10 @@ class _SearchPageState extends State<SearchPage> {
 
   /// Builds the empty state widget with a random SVG illustration
   Widget _buildEmptyState(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDark ? Colors.white : AppTheme.textPrimary;
-
-    // Randomly select one of the empty state images
-    final emptyImages = [
-      'assets/images/empty_loading.svg',
-      'assets/images/search_empty.svg',
-    ];
-    final randomImage = emptyImages[Random().nextInt(emptyImages.length)];
-
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SvgPicture.asset(
-              randomImage,
-              width: 200,
-              height: 200,
-              colorFilter: isDark
-                  ? ColorFilter.mode(
-                      Colors.white.withValues(alpha: 0.7),
-                      BlendMode.srcIn,
-                    )
-                  : null,
-            ),
-            const SizedBox(height: 24),
-            Text(
-              '没有找到相关结果',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: textColor,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '试试其他关键词吧',
-              style: TextStyle(
-                fontSize: 14,
-                color: textColor.withValues(alpha: 0.6),
-              ),
-            ),
-          ],
-        ),
-      ),
+    return EmptyStateWidget(
+      onAction: _searchController.text.trim().isEmpty
+          ? null
+          : () => _performSearch(_searchController.text.trim(), force: true),
     );
   }
 }

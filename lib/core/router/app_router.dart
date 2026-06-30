@@ -16,7 +16,10 @@ import '../../features/auth/presentation/pages/forgot_password/forgot_password_v
 import '../../features/home/presentation/pages/home_page.dart';
 import '../../features/library/presentation/pages/library_page.dart';
 import '../../features/recommend/presentation/pages/recommend_page.dart';
+import '../../features/settings/presentation/pages/edit_name_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
+import '../../features/settings/presentation/pages/support_about_page.dart';
+import '../../features/settings/presentation/pages/system_settings_page.dart';
 import 'scaffold_with_nav_bar.dart';
 import '../../core/presentation/pages/web_browser_page.dart';
 import '../../features/search/presentation/pages/search_page.dart';
@@ -88,7 +91,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/search',
         pageBuilder: (context, state) {
           final type = state.uri.queryParameters['type'] ?? 'all';
-          return SharedAxisTransitionPage(
+          return FadeTransitionPage(
             key: state.pageKey,
             child: SearchPage(searchType: type),
           );
@@ -104,10 +107,39 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
+      GoRoute(
+        path: '/settings/edit-name',
+        pageBuilder: (context, state) {
+          final initialName = state.extra as String? ?? '';
+          return SharedAxisTransitionPage(
+            key: state.pageKey,
+            child: EditNamePage(initialName: initialName),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/settings/support',
+        pageBuilder: (context, state) {
+          return SharedAxisTransitionPage(
+            key: state.pageKey,
+            child: const SupportAboutPage(),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/settings/system',
+        pageBuilder: (context, state) {
+          return SharedAxisTransitionPage(
+            key: state.pageKey,
+            child: const SystemSettingsPage(),
+          );
+        },
+      ),
       StatefulShellRoute(
         navigatorContainerBuilder: (context, navigationShell, children) {
           return AnimatedBranchContainer(
             currentIndex: navigationShell.currentIndex,
+            instantSwitchIndices: const {2},
             children: children,
           );
         },

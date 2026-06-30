@@ -1,149 +1,233 @@
+import 'dart:ui';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/domain/entities/media.dart';
+import 'watch_status_icon.dart';
 
 /// Watch status bottom sheet (P3 style dragger).
 /// Shows 4 watch status options from collections table:
 /// - wish (想看)
 /// - watching (在看)
 /// - watched (看过)
-/// - dropped (弃剧)
+/// - on_hold (搁置)
 class WatchStatusBottomSheet extends StatelessWidget {
   final Media media;
   final String currentStatus;
   final ValueChanged<String> onStatusSelected;
+  final VoidCallback? onRemoveCollection;
 
   const WatchStatusBottomSheet({
     super.key,
     required this.media,
     required this.currentStatus,
     required this.onStatusSelected,
+    this.onRemoveCollection,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardColor = Theme.of(context).cardColor;
-    final dividerColor = Theme.of(context).dividerColor;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final materialColor = isDark
+        ? const Color(0xFF1C1C1E).withValues(alpha: 0.92)
+        : Colors.white.withValues(alpha: 0.94);
+    final primaryText = theme.textTheme.bodyLarge?.color ??
+        (isDark ? Colors.white : AppColors.textPrimary);
+    final secondaryText =
+        theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.62) ??
+            (isDark
+                ? Colors.white.withValues(alpha: 0.62)
+                : AppColors.textSecondary.withValues(alpha: 0.72));
 
-    return Container(
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Drag handle
-          Container(
-            margin: const EdgeInsets.only(top: 12),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: dividerColor,
-              borderRadius: BorderRadius.circular(2),
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: materialColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+            border: Border(
+              top: BorderSide(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Colors.black.withValues(alpha: 0.04),
+              ),
             ),
           ),
-
-          const SizedBox(height: 16),
-
-          // Media header
-          _buildMediaHeader(context, isDark),
-
-          const SizedBox(height: 16),
-
-          // Divider
-          Divider(
-            height: 1,
-            color: dividerColor,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              10,
+              20,
+              bottomPadding > 0 ? bottomPadding + 8 : 20,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.20)
+                        : Colors.black.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Text(
+                      '修改观看状态',
+                      style: TextStyle(
+                        color: primaryText,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Flexible(
+                      child: Text(
+                        '选择当前进度',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: secondaryText,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _buildMediaHeader(context, isDark),
+                const SizedBox(height: 12),
+                _buildStatusGrid(context, isDark: isDark),
+                if (onRemoveCollection != null) ...[
+                  const SizedBox(height: 12),
+                  _buildRemoveButton(context, isDark: isDark),
+                ],
+              ],
+            ),
           ),
+        ),
+      ),
+    );
+  }
 
-          // Status options
-          _buildStatusOption(
-            context,
-            isDark: isDark,
-            status: 'wish',
-            icon: Icons.bookmark_outline,
-            label: '想看',
-            sublabel: 'Watch',
+  Widget _buildRemoveButton(
+    BuildContext context, {
+    required bool isDark,
+  }) {
+    final color = AppColors.error;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.mediumImpact();
+          onRemoveCollection?.call();
+        },
+        borderRadius: BorderRadius.circular(22),
+        child: Container(
+          height: 56,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: isDark ? 0.16 : 0.08),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: color.withValues(alpha: isDark ? 0.34 : 0.22),
+            ),
           ),
-          _buildStatusOption(
-            context,
-            isDark: isDark,
-            status: 'watching',
-            icon: Icons.play_circle_outline_rounded,
-            label: '在看',
-            sublabel: 'Watching',
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.bookmark_remove_rounded, color: color, size: 22),
+              const SizedBox(width: 8),
+              Text(
+                '取消收藏',
+                style: TextStyle(
+                  color: color,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0,
+                ),
+              ),
+            ],
           ),
-          _buildStatusOption(
-            context,
-            isDark: isDark,
-            status: 'watched',
-            icon: Icons.check_circle_outline_rounded,
-            label: '看过',
-            sublabel: 'Finished',
-          ),
-          _buildStatusOption(
-            context,
-            isDark: isDark,
-            status: 'on_hold',
-            icon: Icons.pause_circle_outline_rounded,
-            label: '搁置',
-            sublabel: 'On Hold',
-          ),
-
-          // Safe area padding
-          SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildMediaHeader(BuildContext context, bool isDark) {
-    final textPrimary = Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black;
-    final textSecondary = Theme.of(context).textTheme.bodyMedium?.color ?? Colors.grey;
-    final placeholderColor = isDark ? AppColors.surfaceDark : AppColors.placeholder;
+    final textPrimary =
+        Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black;
+    final textSecondary =
+        Theme.of(context).textTheme.bodyMedium?.color ?? Colors.grey;
+    final placeholderColor =
+        isDark ? AppColors.surfaceDark : AppColors.placeholder;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.04)
+            : AppColors.surface.withValues(alpha: 0.78),
+        borderRadius: BorderRadius.circular(18),
+      ),
       child: Row(
         children: [
-          // Poster thumbnail
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: SizedBox(
-              width: 60,
-              height: 80,
-              child: media.posterUrl.isNotEmpty
-                  ? CachedNetworkImage(
-                      imageUrl: media.posterUrl,
-                      fit: BoxFit.cover,
-                      errorWidget: (context, url, error) => Container(
+          Padding(
+            padding: const EdgeInsets.all(10),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: 52,
+                height: 68,
+                child: media.posterUrl.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: media.posterUrl,
+                        fit: BoxFit.cover,
+                        errorWidget: (context, url, error) => Container(
+                          color: placeholderColor,
+                          child: Icon(
+                            Icons.movie_outlined,
+                            color: textSecondary,
+                            size: 22,
+                          ),
+                        ),
+                      )
+                    : Container(
                         color: placeholderColor,
-                        child: Icon(Icons.movie_outlined, color: textSecondary, size: 24),
+                        child: Icon(
+                          Icons.movie_outlined,
+                          color: textSecondary,
+                          size: 22,
+                        ),
                       ),
-                    )
-                  : Container(
-                      color: placeholderColor,
-                      child: Icon(Icons.movie_outlined, color: textSecondary, size: 24),
-                    ),
+              ),
             ),
           ),
-
-          const SizedBox(width: 12),
-
-          // Title and duration
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  media.titleZh.isNotEmpty ? media.titleZh : media.titleOriginal,
+                  media.titleZh.isNotEmpty
+                      ? media.titleZh
+                      : media.titleOriginal,
                   style: TextStyle(
                     color: textPrimary,
                     fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -155,27 +239,31 @@ class WatchStatusBottomSheet extends StatelessWidget {
                     style: TextStyle(
                       color: textSecondary,
                       fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0,
                     ),
                   ),
                 ],
               ],
             ),
           ),
-
-          // Rating badge if available
           if (media.rating > 0)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.gold.withValues(alpha: isDark ? 0.2 : 0.1),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                media.rating.toString(),
-                style: TextStyle(
-                  color: isDark ? AppColors.gold : AppColors.goldDark,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
+            Padding(
+              padding: const EdgeInsets.only(left: 12, right: 12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.gold.withValues(alpha: isDark ? 0.20 : 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  media.rating.toString(),
+                  style: TextStyle(
+                    color: isDark ? AppColors.gold : AppColors.goldDark,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0,
+                  ),
                 ),
               ),
             ),
@@ -184,60 +272,143 @@ class WatchStatusBottomSheet extends StatelessWidget {
     );
   }
 
+  Widget _buildStatusGrid(
+    BuildContext context, {
+    required bool isDark,
+  }) {
+    const options = [
+      ('wish', '想看'),
+      ('watching', '在看'),
+      ('watched', '看过'),
+      ('on_hold', '搁置'),
+    ];
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var row = 0; row < 2; row++) ...[
+          Row(
+            children: [
+              for (var col = 0; col < 2; col++) ...[
+                Expanded(
+                  child: _buildStatusOption(
+                    context,
+                    isDark: isDark,
+                    status: options[row * 2 + col].$1,
+                    label: options[row * 2 + col].$2,
+                  ),
+                ),
+                if (col == 0) const SizedBox(width: 12),
+              ],
+            ],
+          ),
+          if (row == 0) const SizedBox(height: 12),
+        ],
+      ],
+    );
+  }
+
   Widget _buildStatusOption(
     BuildContext context, {
     required bool isDark,
     required String status,
-    required IconData icon,
     required String label,
-    required String sublabel,
   }) {
     final isSelected = currentStatus == status;
-    final primaryColor = AppColors.starActive;
-    final textPrimary = Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black;
-    final textSecondary = Theme.of(context).textTheme.bodyMedium?.color ?? Colors.grey;
+    final primaryColor = watchStatusColor(status);
+    final textPrimary =
+        Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black;
+    final pressedColor = isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : Colors.black.withValues(alpha: 0.04);
+    final iconColor = isSelected
+        ? primaryColor
+        : (isDark
+            ? Colors.white.withValues(alpha: 0.62)
+            : AppColors.textSecondary.withValues(alpha: 0.82));
+    final iconBackground = isSelected
+        ? primaryColor.withValues(alpha: isDark ? 0.24 : 0.14)
+        : (isDark
+            ? Colors.white.withValues(alpha: 0.08)
+            : AppColors.textSecondary.withValues(alpha: 0.08));
 
-    return InkWell(
-      onTap: () => onStatusSelected(status),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? primaryColor : textSecondary,
-              size: 24,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onStatusSelected(status);
+        },
+        splashColor: Colors.transparent,
+        highlightColor: pressedColor,
+        borderRadius: BorderRadius.circular(22),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          height: 68,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? primaryColor.withValues(alpha: isDark ? 0.18 : 0.12)
+                : (isDark
+                    ? Colors.white.withValues(alpha: 0.04)
+                    : Colors.black.withValues(alpha: 0.018)),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: isSelected
+                  ? primaryColor.withValues(alpha: 0.86)
+                  : (isDark
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : Colors.black.withValues(alpha: 0.04)),
+              width: isSelected ? 1.4 : 1,
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Row(
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: isSelected ? primaryColor : textPrimary,
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: iconBackground,
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(
+                        watchStatusIconData(status),
+                        color: iconColor,
+                        size: 24,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    sublabel,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: isSelected ? primaryColor.withValues(alpha: 0.8) : textSecondary,
+                    const SizedBox(width: 10),
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w500,
+                        color: isSelected ? primaryColor : textPrimary,
+                        letterSpacing: 0,
+                      ),
                     ),
-                  ),
-                ],
+                    if (isSelected) ...[
+                      const SizedBox(width: 10),
+                      Icon(
+                        Icons.check_rounded,
+                        color: primaryColor,
+                        size: 20,
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ),
-            if (isSelected)
-              Icon(
-                Icons.check,
-                color: primaryColor,
-                size: 20,
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );

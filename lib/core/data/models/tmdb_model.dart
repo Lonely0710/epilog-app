@@ -18,10 +18,13 @@ class TmdbModel {
 
     final id = _toInt(item['id']).toString();
     final titleZh = isMovie ? item['title'] : item['name'];
-    final titleOriginal = isMovie ? item['original_title'] : item['original_name'];
+    final titleOriginal =
+        isMovie ? item['original_title'] : item['original_name'];
 
     // Determine release date
-    final releaseDate = isMovie ? (item['release_date'] ?? '未知日期') : (item['first_air_date'] ?? '未知日期');
+    final releaseDate = isMovie
+        ? (item['release_date'] ?? '未知日期')
+        : (item['first_air_date'] ?? '未知日期');
 
     String year = '----';
     if (releaseDate != '未知日期' && releaseDate.length >= 4) {
@@ -30,7 +33,8 @@ class TmdbModel {
 
     // Poster
     final posterPath = item['poster_path'];
-    final posterUrl = posterPath != null ? 'https://image.tmdb.org/t/p/w500$posterPath' : '';
+    final posterUrl =
+        posterPath != null ? 'https://image.tmdb.org/t/p/w500$posterPath' : '';
 
     final rating = (item['vote_average'] as num?)?.toDouble() ?? 0.0;
 
@@ -92,7 +96,8 @@ class TmdbModel {
         final crew = credits['crew'] as List;
         directors = crew
             .where((member) {
-              if (item.containsKey('aggregate_credits') && member['jobs'] != null) {
+              if (item.containsKey('aggregate_credits') &&
+                  member['jobs'] != null) {
                 final jobs = member['jobs'] as List;
                 return jobs.any((j) => j['job'] == 'Director');
               }
@@ -104,7 +109,10 @@ class TmdbModel {
       }
       if (credits['cast'] != null) {
         final cast = credits['cast'] as List;
-        actors = cast.map((member) => member['name'] as String).take(5).toList();
+        actors = cast
+            .map((member) => member['name']?.toString() ?? '')
+            .where((name) => name.isNotEmpty)
+            .toList();
       }
     }
 
@@ -136,7 +144,9 @@ class TmdbModel {
               return {
                 'name': net['name']?.toString() ?? '',
                 // Use w185 size for better loading compatibility (original can be SVG or very large)
-                'logoUrl': logoPath != null ? 'https://image.tmdb.org/t/p/w185$logoPath' : '',
+                'logoUrl': logoPath != null
+                    ? 'https://image.tmdb.org/t/p/w185$logoPath'
+                    : '',
               };
             })
             .where((n) => n['name']!.isNotEmpty)

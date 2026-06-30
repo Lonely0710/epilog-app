@@ -24,15 +24,9 @@ class LibraryPage extends StatefulWidget {
   State<LibraryPage> createState() => _LibraryPageState();
 }
 
-class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver, SingleTickerProviderStateMixin {
-  late final PageController _pageController;
+class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
   late final CollectionRepository _repository;
   StreamSubscription? _subscription;
-
-  // FAB Animation Controller for smooth Night Mode transitions
-  AnimationController? _fabAnimController;
-  Animation<double>? _fabScale;
-  Animation<double>? _fabSlide;
 
   bool _isAnimeWall = false;
   bool _isLoading = true;
@@ -42,6 +36,7 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver, 
 
   // Night Mode State
   bool _isNightMode = false;
+  bool _immersiveLayout = false;
 
   // Track if data needs refresh when becoming visible
   bool _needsRefresh = false;
@@ -52,26 +47,7 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver, 
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _pageController = PageController();
     _repository = CollectionRepository();
-
-    // Initialize FAB animation controller with spring-like curve
-    _fabAnimController = AnimationController(
-      duration: const Duration(milliseconds: 500),
-      vsync: this,
-    );
-
-    // Staggered animations for FAB elements
-    // Keep FAB visible but slide it down slightly
-    // Fab Animation Controller
-    // Remove Opacity fade (keep fully visible)
-    // Slide down by ~80px to clear the poster area
-    _fabSlide = Tween<double>(begin: 0.0, end: 50.0).animate(
-      CurvedAnimation(
-        parent: _fabAnimController!,
-        curve: const Interval(0.2, 1.0, curve: Curves.easeInOutCubicEmphasized),
-      ),
-    );
 
     _subscription = _repository.onCollectionChanged.listen((_) {
       // Mark as needing refresh - will reload when page becomes active
@@ -88,8 +64,6 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver, 
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _subscription?.cancel();
-    _pageController.dispose();
-    _fabAnimController?.dispose();
     super.dispose();
   }
 
@@ -132,15 +106,17 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver, 
     setState(() => _isLoading = true);
 
     try {
-      final results = await Future.wait([
-        _repository.getCollectedMedia(mediaTypes: ['movie', 'tv']),
-        _repository.getCollectedMedia(mediaTypes: ['anime']),
-      ]);
+      final allItems = await _repository.getCollectedMedia();
+      final mediaLibraryItems = allItems
+          .where((item) => item.mediaType == 'movie' || item.mediaType == 'tv')
+          .toList();
+      final animeWallItems =
+          allItems.where((item) => item.mediaType == 'anime').toList();
 
       if (mounted) {
         setState(() {
-          _mediaLibraryItems = results[0];
-          _animeWallItems = results[1];
+          _mediaLibraryItems = mediaLibraryItems;
+          _animeWallItems = animeWallItems;
           _isLoading = false;
         });
         // Only reset refresh flag after successful load
@@ -159,20 +135,24 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver, 
     setState(() {
       _isAnimeWall = !_isAnimeWall;
     });
-    _pageController.animateToPage(
-      _isAnimeWall ? 1 : 0,
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeInOutCubic,
-    );
   }
 
-  int get _currentCount => _isAnimeWall ? _animeWallItems.length : _mediaLibraryItems.length;
+  void _setImmersiveLayout(bool value) {
+    if (_immersiveLayout == value) return;
+    setState(() {
+      _immersiveLayout = value;
+    });
+  }
+
+  int get _currentCount =>
+      _isAnimeWall ? _animeWallItems.length : _mediaLibraryItems.length;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          Theme.of(context).brightness == Brightness.dark ? AppColors.backgroundDark : AppColors.surfaceVariant,
+      backgroundColor: Theme.of(context).brightness == Brightness.dark
+          ? AppColors.backgroundDark
+          : AppColors.surfaceVariant,
       body: Stack(
         children: [
           // 1. Main Content
@@ -180,63 +160,81 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver, 
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Title row with gradient text and count
-                _buildTitleRow(),
-
-                const SizedBox(height: 12),
-
-                // PageView for the two grids
-                // We use LayoutBuilder to determine exact available height for posters
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 520),
+                  curve: Curves.easeInOutCubicEmphasized,
+                  alignment: Alignment.topCenter,
+                  child: ClipRect(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 320),
+                      reverseDuration: const Duration(milliseconds: 220),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      layoutBuilder: (currentChild, previousChildren) {
+                        return Stack(
+                          alignment: Alignment.topCenter,
+                          children: [
+                            ...previousChildren,
+                            if (currentChild != null) currentChild,
+                          ],
+                        );
+                      },
+                      child: _immersiveLayout
+                          ? const SizedBox.shrink()
+                          : _buildTitleRow(),
+                    ),
+                  ),
+                ),
                 Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final availableHeight = constraints.maxHeight;
-                      // Calculate item height based on mode:
-                      // 2-column mode: 2 rows (2x2 = 4 posters)
-                      // 3-column mode: 3 rows (3x3 = 9 posters)
-                      final rowCount = _isCompactMode ? 3 : 2;
-                      final spacing = _isCompactMode ? 24.0 : 16.0; // mainAxisSpacing
-                      final itemHeight = (availableHeight - spacing) / rowCount;
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 520),
+                    reverseDuration: const Duration(milliseconds: 360),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) {
+                      final curvedAnimation = CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutCubic,
+                        reverseCurve: Curves.easeInOutCubic,
+                      );
+                      final slide = Tween<Offset>(
+                        begin: const Offset(0.0, 0.045),
+                        end: Offset.zero,
+                      ).animate(curvedAnimation);
+                      final scale = Tween<double>(
+                        begin: 0.992,
+                        end: 1.0,
+                      ).animate(curvedAnimation);
 
-                      final availableWidth = constraints.maxWidth;
-                      // 2 columns Logic:
-                      final itemWidth2 = (availableWidth - 32) / 2;
-                      final ratio2 = itemWidth2 / itemHeight;
-
-                      // 3 columns Logic (Compact Mode):
-                      final itemWidth3 = (availableWidth - 44) / 3;
-                      final ratio3 = itemWidth3 / itemHeight;
-
-                      // Choose ratio based on mode
-                      final childAspectRatio = _isCompactMode ? ratio3 : ratio2;
-
-                      return PageView(
-                        controller: _pageController,
-                        physics: const NeverScrollableScrollPhysics(),
-                        children: [
-                          LibraryGridView(
-                            items: _mediaLibraryItems,
-                            isLoading: _isLoading,
-                            onRefresh: _loadData,
-                            emptyMessage: '暂无影视收藏',
-                            emptySvg: 'assets/images/empty_loading.svg',
-                            emptyIcon: Icons.movie_outlined,
-                            crossAxisCount: _isCompactMode ? 3 : 2,
-                            childAspectRatio: childAspectRatio,
+                      return FadeTransition(
+                        opacity: curvedAnimation,
+                        child: SlideTransition(
+                          position: slide,
+                          child: ScaleTransition(
+                            scale: scale,
+                            alignment: Alignment.topCenter,
+                            child: child,
                           ),
-                          LibraryGridView(
-                            items: _animeWallItems,
-                            isLoading: _isLoading,
-                            onRefresh: _loadData,
-                            emptyMessage: '暂无动漫收藏',
-                            emptySvg: 'assets/images/empty_loading.svg',
-                            emptyIcon: Icons.auto_awesome,
-                            crossAxisCount: _isCompactMode ? 3 : 2,
-                            childAspectRatio: childAspectRatio,
-                          ),
-                        ],
+                        ),
                       );
                     },
+                    child: LibraryGridView(
+                      key: ValueKey(
+                        'library-${_isAnimeWall ? 'anime' : 'media'}-${_immersiveLayout ? 'imm' : 'std'}',
+                      ),
+                      items:
+                          _isAnimeWall ? _animeWallItems : _mediaLibraryItems,
+                      isLoading: _isLoading,
+                      onRefresh: _loadData,
+                      emptyMessage: _isAnimeWall ? '暂无动漫收藏' : '暂无影视收藏',
+                      emptyIcon: _isAnimeWall
+                          ? Icons.auto_awesome
+                          : Icons.movie_outlined,
+                      crossAxisCount: _isCompactMode ? 3 : 2,
+                      topPadding: _immersiveLayout ? 6 : 12,
+                      bottomPadding: _immersiveLayout ? 8 : 112,
+                      showWatchStatus: !_immersiveLayout,
+                    ),
                   ),
                 ),
               ],
@@ -255,11 +253,13 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver, 
                   curve: Curves.easeInOut,
                   decoration: BoxDecoration(
                     gradient: RadialGradient(
-                      center: const Alignment(0.0, 0.0), // Center of the screen (Posters)
+                      center: const Alignment(
+                          0.0, 0.0), // Center of the screen (Posters)
                       radius: 1.0, // Focus light on content
                       colors: [
                         Colors.transparent, // Lit area
-                        AppColors.shadowDark.withValues(alpha: 0.5), // Subtler dark surroundings
+                        AppColors.shadowDark.withValues(
+                            alpha: 0.5), // Subtler dark surroundings
                       ],
                       stops: const [0.2, 1.0],
                     ),
@@ -278,7 +278,7 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver, 
                 // Right padding 20.
                 // Moved further right as requested (-32 instead of -60)
                 final anchorX = constraints.maxWidth - 32;
-                final anchorY = 94.0;
+                final anchorY = _immersiveLayout ? 24.0 : 94.0;
 
                 return PullLightSwitch(
                   anchorOffset: Offset(anchorX, anchorY),
@@ -287,14 +287,7 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver, 
                     setState(() {
                       _isNightMode = val;
                     });
-                    // Animate FAB with night mode toggle
-                    if (val) {
-                      _fabAnimController?.forward();
-                    } else {
-                      _fabAnimController?.reverse();
-                    }
-                    // Trigger full-screen (hide nav) when Night Mode is ON
-                    // Exit full-screen (show nav) when Night Mode is OFF
+                    _setImmersiveLayout(val);
                     NavVisibilityController.of(context)?.setNavVisibility(!val);
                   },
                 );
@@ -328,59 +321,14 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver, 
             ),
         ],
       ),
-      floatingActionButton: _fabAnimController == null
-          ? _buildFabContent()
-          : AnimatedBuilder(
-              animation: _fabAnimController!,
-              builder: (context, child) {
-                return Transform.translate(
-                  offset: Offset(0, _fabSlide?.value ?? 0),
-                  child: Transform.scale(
-                    scale: _fabScale?.value ?? 1.0,
-                    child: _buildFabContent(),
-                  ),
-                );
-              },
-            ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-    );
-  }
-
-  Widget _buildFabContent() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 100),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Left: Grid layout switcher
-          Padding(
-            padding: const EdgeInsets.only(left: 32),
-            child: GridLayoutSwitcher(
-              isCompactMode: _isCompactMode,
-              onToggle: () {
-                setState(() {
-                  _isCompactMode = !_isCompactMode;
-                });
-              },
-            ),
-          ),
-          // Right: Page switcher
-          Padding(
-            padding: const EdgeInsets.only(right: 32),
-            child: JellyPageSwitcher(
-              isAnimeWall: _isAnimeWall,
-              onToggle: _togglePage,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
   Widget _buildTitleRow() {
     // 1. Determine Banner Asset & Text Color
     // Logic: Always use Red for Anime, Yellow for Movie
-    final isDark = Theme.of(context).brightness == Brightness.dark; // Keep for key if needed, or remove
+    final isDark = Theme.of(context).brightness ==
+        Brightness.dark; // Keep for key if needed, or remove
     String bannerAsset;
     Color titleColor;
 
@@ -409,14 +357,17 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver, 
           );
         },
         child: Container(
-          key: ValueKey('$_isAnimeWall-$isDark'), // Rebuild on state/theme change
+          key: ValueKey(
+              '$_isAnimeWall-$isDark'), // Rebuild on state/theme change
           height: 80, // Approximate height for banner
           decoration: BoxDecoration(
             image: DecorationImage(
               image: AssetImage(bannerAsset),
-              fit: BoxFit.cover, // Or BoxFit.fill depending on asset aspect ratio
+              fit: BoxFit
+                  .cover, // Or BoxFit.fill depending on asset aspect ratio
             ),
-            borderRadius: BorderRadius.circular(16), // Rounded corners for banner
+            borderRadius:
+                BorderRadius.circular(16), // Rounded corners for banner
             boxShadow: [
               BoxShadow(
                 color: AppColors.shadowDark.withValues(alpha: 0.1),
@@ -441,13 +392,43 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver, 
                   letterSpacing: 0.5,
                 ),
               ),
-
-              // Count indicator: "共 X 部"
-              if (!_isLoading) _buildCountIndicator(textColor: titleColor),
+              const SizedBox(height: 2),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Count indicator: "共 X 部"
+                  if (!_isLoading) _buildCountIndicator(textColor: titleColor),
+                  const SizedBox(width: 16),
+                  _buildBannerActions(),
+                ],
+              ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildBannerActions() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GridLayoutSwitcher(
+          isCompactMode: _isCompactMode,
+          size: 28,
+          onToggle: () {
+            setState(() {
+              _isCompactMode = !_isCompactMode;
+            });
+          },
+        ),
+        const SizedBox(width: 8),
+        JellyPageSwitcher(
+          isAnimeWall: _isAnimeWall,
+          size: 28,
+          onToggle: _togglePage,
+        ),
+      ],
     );
   }
 

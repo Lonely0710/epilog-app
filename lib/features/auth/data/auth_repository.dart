@@ -14,16 +14,20 @@ abstract class AuthRepository {
   Stream<bool> get authStateChanges;
 
   // Sign In
-  Future<void> signInWithEmail({required String email, required String password});
+  Future<void> signInWithEmail(
+      {required String email, required String password});
   Future<void> signInWithOAuth(String provider);
 
   // Sign Up & Verification
-  Future<void> signUpWithEmail({required String email, required String password});
-  Future<void> verifyEmailOtp({required String email, required String token}); // OTP Verification
+  Future<void> signUpWithEmail(
+      {required String email, required String password});
+  Future<void> verifyEmailOtp(
+      {required String email, required String token}); // OTP Verification
 
   // Password Reset
   Future<void> sendPasswordResetEmail({required String email});
-  Future<void> verifyPasswordResetOtp({required String email, required String token, String? password});
+  Future<void> verifyPasswordResetOtp(
+      {required String email, required String token, String? password});
 
   Future<void> updatePassword({required String password});
 
@@ -42,6 +46,8 @@ class ClerkAuthRepositoryImpl implements AuthRepository {
   static void setAuthState(ClerkAuthState authState) {
     _authState = authState;
   }
+
+  static ClerkAuthState? get authState => _authState;
 
   ClerkAuthState? get _auth => _authState;
 
@@ -72,17 +78,35 @@ class ClerkAuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<void> signInWithEmail({required String email, required String password}) async {
+  Future<void> signInWithEmail(
+      {required String email, required String password}) async {
     if (_auth == null) {
       throw Exception('ClerkAuthState not initialized. Use ClerkAuth widget.');
     }
 
     try {
+      if (_auth!.isSignedIn) return;
+
+      // Clear any stale progressive sign-in attempt before creating a fresh
+      // password sign-in. Clerk otherwise continues the previous SignIn object
+      // for the same identifier, including old needs_second_factor states.
+      await _auth!.resetClient();
+
       await _auth!.attemptSignIn(
         strategy: clerk.Strategy.password,
         identifier: email,
         password: password,
       );
+
+      if (_auth!.isSignedIn) return;
+
+      final status = _auth!.client.signIn?.status.toString();
+      if (status != null && status.contains('needs_second_factor')) {
+        throw Exception('Second factor verification is required.');
+      }
+
+      throw Exception(
+          'Sign in did not complete. Status: ${status ?? 'unknown'}');
     } catch (e) {
       debugPrint("Clerk Sign In Failed: $e");
       rethrow;
@@ -91,12 +115,15 @@ class ClerkAuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<void> signInWithOAuth(String provider) async {
-    debugPrint("Clerk OAuth sign-in should be done via ClerkAuthentication widget");
-    throw UnimplementedError('Use ClerkAuthentication widget for OAuth sign-in');
+    debugPrint(
+        "Clerk OAuth sign-in should be done via ClerkAuthentication widget");
+    throw UnimplementedError(
+        'Use ClerkAuthentication widget for OAuth sign-in');
   }
 
   @override
-  Future<void> signUpWithEmail({required String email, required String password}) async {
+  Future<void> signUpWithEmail(
+      {required String email, required String password}) async {
     if (_auth == null) {
       throw Exception('ClerkAuthState not initialized. Use ClerkAuth widget.');
     }
@@ -115,7 +142,8 @@ class ClerkAuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<void> verifyEmailOtp({required String email, required String token}) async {
+  Future<void> verifyEmailOtp(
+      {required String email, required String token}) async {
     if (_auth == null) {
       throw Exception('ClerkAuthState not initialized');
     }
@@ -149,7 +177,8 @@ class ClerkAuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<void> verifyPasswordResetOtp({required String email, required String token, String? password}) async {
+  Future<void> verifyPasswordResetOtp(
+      {required String email, required String token, String? password}) async {
     if (_auth == null) {
       throw Exception('ClerkAuthState not initialized');
     }
@@ -163,9 +192,11 @@ class ClerkAuthRepositoryImpl implements AuthRepository {
       );
 
       final signIn = _auth?.client.signIn;
-      if (signIn != null && !signIn.status.toString().toLowerCase().contains('complete')) {
+      if (signIn != null &&
+          !signIn.status.toString().toLowerCase().contains('complete')) {
         debugPrint("SignIn Status: ${signIn.status}");
-        throw Exception("Verification failed. Password might be too weak or compromised (form_password_pwned).");
+        throw Exception(
+            "Verification failed. Password might be too weak or compromised (form_password_pwned).");
       }
     } catch (e) {
       if (e.toString().contains('session_exists')) {

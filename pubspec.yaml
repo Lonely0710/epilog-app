@@ -26,6 +26,7 @@ dependencies:
   image_picker: ^1.2.1
   lava_lamp_effect: ^1.0.3
   flutter_svg: ^2.2.3
+  flutter_lucide_animated: ^0.0.4
   liquid_glass_renderer: ^0.2.0-dev.4
   animations: ^2.1.1
   share_plus: ^12.0.1
@@ -78,6 +79,9 @@ flutter:
     - family: HanSerifSC
       fonts:
         - asset: assets/font/hanserifsc_bold.otf
+    - family: JingHuaSC
+      fonts:
+        - asset: assets/font/JingHua-SC.ttf
     - family: BitcountGridDoubleInk
       fonts:
         - asset: assets/font/BitcountGridDoubleInk-VariableFont.ttf

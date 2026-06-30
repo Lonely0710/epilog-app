@@ -11,6 +11,7 @@ class SettingsAvatar extends StatelessWidget {
   final bool isUsingLocalImage;
   final File? localImageFile;
   final bool isUploading;
+  final int avatarVersion;
   final VoidCallback onRefresh;
   final VoidCallback onPickImage;
 
@@ -21,6 +22,7 @@ class SettingsAvatar extends StatelessWidget {
     required this.isUsingLocalImage,
     this.localImageFile,
     required this.isUploading,
+    required this.avatarVersion,
     required this.onRefresh,
     required this.onPickImage,
     this.onCreated,
@@ -30,80 +32,156 @@ class SettingsAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        RepaintBoundary(
-          key: avatarKey,
-          child: Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Theme.of(context).colorScheme.surface,
-              border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 3),
-              boxShadow: [BoxShadow(color: Theme.of(context).shadowColor.withValues(alpha: 0.1), blurRadius: 8)],
-            ),
-            child: ClipOval(
-              child: isUsingLocalImage && localImageFile != null
-                  ? Image.file(localImageFile!, fit: BoxFit.cover)
-                  : (avatarUrl != null && avatarUrl!.isNotEmpty && !isUsingLocalImage
-                      ? CachedNetworkImage(
-                          imageUrl: avatarUrl!,
+        Semantics(
+          button: true,
+          label: '更换头像图片',
+          child: GestureDetector(
+            onTap: onPickImage,
+            child: RepaintBoundary(
+              key: avatarKey,
+              child: Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Theme.of(context).colorScheme.surface,
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : Colors.white.withValues(alpha: 0.72),
+                    width: 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Theme.of(context)
+                          .shadowColor
+                          .withValues(alpha: isDark ? 0.18 : 0.08),
+                      blurRadius: 18,
+                      spreadRadius: -10,
+                      offset: const Offset(0, 9),
+                    )
+                  ],
+                ),
+                child: ClipOval(
+                  child: isUsingLocalImage && localImageFile != null
+                      ? Image.file(
+                          localImageFile!,
+                          key: ValueKey(
+                              'local-$avatarVersion-${localImageFile!.path}'),
                           fit: BoxFit.cover,
                         )
-                      : SizedBox(
-                          width: 80,
-                          height: 80,
-                          child: NotionAvatar(
-                            useRandom: true,
-                            onCreated: onCreated,
-                          ),
-                        )),
+                      : (avatarUrl != null &&
+                              avatarUrl!.isNotEmpty &&
+                              !isUsingLocalImage
+                          ? CachedNetworkImage(
+                              key: ValueKey('remote-$avatarVersion-$avatarUrl'),
+                              imageUrl: avatarUrl!,
+                              fit: BoxFit.cover,
+                            )
+                          : SizedBox(
+                              width: 80,
+                              height: 80,
+                              child: ClipRect(
+                                child: NotionAvatar(
+                                  useRandom: true,
+                                  onCreated: onCreated,
+                                ),
+                              ),
+                            )),
+                ),
+              ),
             ),
           ),
         ),
-        // Refresh Button
         Positioned(
-          top: -4,
-          right: -4,
-          child: InkWell(
+          bottom: 0,
+          right: 0,
+          child: _AvatarActionButton(
+            tooltip: '随机头像',
             onTap: onRefresh,
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(color: AppTheme.primary, shape: BoxShape.circle),
-              child: const Icon(Icons.refresh, color: Colors.white, size: 14),
-            ),
-          ),
-        ),
-        // Add Photo Button
-        Positioned(
-          bottom: -4,
-          right: -4,
-          child: InkWell(
-            onTap: onPickImage,
-            child: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? AppTheme.primary.withValues(alpha: 0.2)
-                      : Theme.of(context).scaffoldBackgroundColor,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: AppTheme.primary.withValues(alpha: 0.5),
-                    width: 1.5,
-                  )),
-              child: Icon(Icons.add_photo_alternate, color: AppTheme.primary, size: 16),
-            ),
+            padding: const EdgeInsets.all(4),
+            backgroundColor: AppTheme.primary,
+            foregroundColor: Colors.white,
+            icon: Icons.refresh,
+            iconSize: 14,
           ),
         ),
         if (isUploading)
           Positioned.fill(
             child: Center(
-              child: CircularProgressIndicator(color: Theme.of(context).primaryColor),
+              child: ClipOval(
+                child: ColoredBox(
+                  color: Colors.black.withValues(alpha: 0.18),
+                  child: SizedBox(
+                    width: 80,
+                    height: 80,
+                    child: Center(
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.4,
+                          color: Theme.of(context).primaryColor,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
       ],
+    );
+  }
+}
+
+class _AvatarActionButton extends StatelessWidget {
+  final String tooltip;
+  final VoidCallback onTap;
+  final EdgeInsets padding;
+  final Color backgroundColor;
+  final Color foregroundColor;
+  final IconData icon;
+  final double iconSize;
+
+  const _AvatarActionButton({
+    required this.tooltip,
+    required this.onTap,
+    required this.padding,
+    required this.backgroundColor,
+    required this.foregroundColor,
+    required this.icon,
+    required this.iconSize,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: tooltip,
+      child: Tooltip(
+        message: tooltip,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: Container(
+              padding: padding,
+              decoration: BoxDecoration(
+                color: backgroundColor,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: foregroundColor, size: iconSize),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

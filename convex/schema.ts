@@ -60,4 +60,46 @@ export default defineSchema({
         .index("by_user", ["userId"])
         .index("by_user_media", ["userId", "mediaId"])
         .index("by_user_created", ["userId", "createdAt"]),
+
+    anime_info: defineTable({
+        mediaId: v.id("media"),
+        people: v.array(v.object({
+            name: v.string(),
+            nameCn: v.optional(v.string()),
+            imageUrl: v.optional(v.string()),
+            role: v.optional(v.string()),
+            cv: v.optional(v.string()),
+            source: v.optional(v.string()),
+            episodeCount: v.optional(v.number()),
+        })),
+        updatedAt: v.number(),
+    }).index("by_media", ["mediaId"]),
+
+    tv_info: defineTable({
+        mediaId: v.id("media"),
+        people: v.array(v.object({
+            name: v.string(),
+            nameCn: v.optional(v.string()),
+            imageUrl: v.optional(v.string()),
+            role: v.optional(v.string()),
+            cv: v.optional(v.string()),
+            source: v.optional(v.string()),
+            episodeCount: v.optional(v.number()),
+        })),
+        updatedAt: v.number(),
+    }).index("by_media", ["mediaId"]),
+
+    movies_info: defineTable({
+        mediaId: v.id("media"),
+        people: v.array(v.object({
+            name: v.string(),
+            nameCn: v.optional(v.string()),
+            imageUrl: v.optional(v.string()),
+            role: v.optional(v.string()),
+            cv: v.optional(v.string()),
+            source: v.optional(v.string()),
+            episodeCount: v.optional(v.number()),
+        })),
+        updatedAt: v.number(),
+    }).index("by_media", ["mediaId"]),
 });

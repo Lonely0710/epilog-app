@@ -1,21 +1,27 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_card_swiper/flutter_card_swiper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../features/collections/domain/repositories/collection_repository.dart';
 import '../../../../core/presentation/widgets/app_snack_bar.dart';
+import '../../../../core/presentation/widgets/empty_state_widget.dart';
 import '../../../../core/domain/entities/media.dart';
 import '../../../../core/services/media_providers/bangumi_service.dart';
 import '../../../../core/services/media_providers/maoyan_service.dart';
 import '../../../../core/services/media_providers/tmdb_service.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_theme.dart';
+import '../../../collections/presentation/widgets/collection_category_sheet.dart';
 import 'swipeable_media_card.dart';
 import 'home_side_bar.dart';
 
 // Data State: Feed Content
 // Uses family to fetch based on index, avoiding StateProvider dependency
-final homeFeedProvider = FutureProvider.autoDispose.family<List<Media>, int>((ref, index) async {
+final homeFeedProvider =
+    FutureProvider.autoDispose.family<List<Media>, int>((ref, index) async {
   final tmdbService = TmdbService();
   final maoyanService = MaoyanService();
   final bangumiService = BangumiService();
@@ -36,7 +42,11 @@ final homeFeedProvider = FutureProvider.autoDispose.family<List<Media>, int>((re
         items = await maoyanService.getMoviesOnShowing();
         break;
       case 2: // Bangumi (Anime)
-        final schedule = await bangumiService.getWeeklySchedule();
+        final bangumiResults = await Future.wait([
+          bangumiService.getWeeklySchedule(),
+          bangumiService.getTrends(),
+        ]);
+        final schedule = bangumiResults[0] as Map<String, List<Media>>;
         final List<Media> todayItems = [];
         final now = DateTime.now();
         final weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -44,8 +54,10 @@ final homeFeedProvider = FutureProvider.autoDispose.family<List<Media>, int>((re
         if (schedule.containsKey(todayKey)) {
           todayItems.addAll(schedule[todayKey]!);
         }
-        final trends = await bangumiService.getTrends();
-        items = [...todayItems, ...trends];
+        final trends = bangumiResults[1] as List<Media>;
+        final hydratedTodayItems =
+            await bangumiService.hydrateMissingSummaries(todayItems);
+        items = [...hydratedTodayItems, ...trends];
         break;
       case 3: // Collection
         items = [];
@@ -98,51 +110,87 @@ class _HomeContentState extends ConsumerState<HomeContent> {
           child: Stack(
             children: [
               // Card Swiper (main content)
-              Padding(
-                padding: const EdgeInsets.only(left: 70),
-                child: feedState.when(
-                  data: (mediaList) {
-                    if (mediaList.isEmpty) {
-                      if (_selectedIndex == 3) {
-                        return const Center(child: Text('Viewing Collection... (Coming Soon)'));
-                      }
-                      return const Center(child: Text('No recommendations found.'));
-                    }
-                    return CardSwiper(
-                      key: ValueKey(_selectedIndex),
-                      controller: _swiperController,
-                      cardsCount: mediaList.length,
-                      onSwipe: (previousIndex, currentIndex, direction) {
-                        if (direction == CardSwiperDirection.right) {
-                          final media = mediaList[previousIndex];
-                          // Show category sheet after a short delay to allow visual swipe completion
-                          Future.delayed(const Duration(milliseconds: 200), () {
-                            if (context.mounted) {
-                              _showCategorySheet(context, media);
-                            }
-                          });
-                        }
-                        return true;
-                      },
-                      cardBuilder: (context, index, percentThresholdX, percentThresholdY) {
-                        return SwipeableMediaCard(
-                          media: mediaList[index],
-                          percentX: percentThresholdX,
-                          percentY: percentThresholdY,
-                        );
-                      },
-                    );
-                  },
-                  error: (err, stack) => Center(child: Text('Error: $err')),
-                  loading: () => const Center(child: CircularProgressIndicator()),
+              Positioned.fill(
+                child: Padding(
+                  padding: const EdgeInsets.only(
+                    left: 70,
+                    right: 18,
+                    top: 8,
+                    bottom: 100,
+                  ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final maxCardWidth = constraints.maxWidth;
+                      final maxCardHeight = constraints.maxHeight;
+                      final cardWidth =
+                          math.min(maxCardWidth, maxCardHeight * 0.66);
+                      final cardHeight =
+                          math.min(maxCardHeight, cardWidth / 0.66);
+
+                      return Align(
+                        alignment: Alignment.topCenter,
+                        child: SizedBox(
+                          width: cardWidth,
+                          height: cardHeight,
+                          child: feedState.when(
+                            data: (mediaList) {
+                              if (mediaList.isEmpty) {
+                                return EmptyStateWidget(
+                                  onAction: () => ref.refresh(
+                                    homeFeedProvider(_selectedIndex),
+                                  ),
+                                );
+                              }
+                              return CardSwiper(
+                                key: ValueKey(_selectedIndex),
+                                controller: _swiperController,
+                                cardsCount: mediaList.length,
+                                numberOfCardsDisplayed:
+                                    mediaList.length > 1 ? 2 : 1,
+                                padding: EdgeInsets.zero,
+                                scale: 0.94,
+                                onSwipe:
+                                    (previousIndex, currentIndex, direction) {
+                                  if (direction == CardSwiperDirection.right) {
+                                    final media = mediaList[previousIndex];
+                                    // Show category sheet after a short delay to allow visual swipe completion
+                                    Future.delayed(
+                                        const Duration(milliseconds: 200), () {
+                                      if (context.mounted) {
+                                        _showCategorySheet(context, media);
+                                      }
+                                    });
+                                  }
+                                  return true;
+                                },
+                                cardBuilder: (context, index, percentThresholdX,
+                                    percentThresholdY) {
+                                  return SwipeableMediaCard(
+                                    media: mediaList[index],
+                                    percentX: percentThresholdX,
+                                    percentY: percentThresholdY,
+                                  );
+                                },
+                              );
+                            },
+                            error: (err, stack) =>
+                                Center(child: Text('Error: $err')),
+                            loading: () => const Center(
+                                child: CircularProgressIndicator()),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
               // Sidebar positioned on left
               Positioned(
                 left: 0,
-                top: 0,
-                bottom: 0,
-                child: Center(
+                top: 18,
+                bottom: 84,
+                child: Align(
+                  alignment: Alignment.center,
                   child: HomeSideBar(
                     selectedIndex: _selectedIndex,
                     onItemSelected: _onSideBarSelected,
@@ -166,10 +214,12 @@ class _HomeContentState extends ConsumerState<HomeContent> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
-            color: isDark ? AppColors.surfaceDark : AppColors.surface,
+            color: Colors.transparent,
             borderRadius: BorderRadius.circular(30),
             border: Border.all(
-              color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.05),
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : Colors.black.withValues(alpha: 0.05),
             ),
           ),
           child: Row(
@@ -177,14 +227,16 @@ class _HomeContentState extends ConsumerState<HomeContent> {
             children: [
               Icon(
                 Icons.search,
-                color: isDark ? AppColors.textTertiary : AppColors.textSecondary,
+                color:
+                    isDark ? AppColors.textTertiary : AppColors.textSecondary,
                 size: 20,
               ),
               const SizedBox(width: 8),
               Text(
                 '搜索电视剧、电影、动漫...',
                 style: TextStyle(
-                  color: isDark ? AppColors.textTertiary : AppColors.textSecondary,
+                  color:
+                      isDark ? AppColors.textTertiary : AppColors.textSecondary,
                   fontSize: 14,
                 ),
               ),
@@ -196,79 +248,17 @@ class _HomeContentState extends ConsumerState<HomeContent> {
   }
 
   void _showCategorySheet(BuildContext parentContext, Media media) {
-    showModalBottomSheet(
+    showCollectionCategorySheet(
       context: parentContext,
       useRootNavigator: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Container(
-        decoration: BoxDecoration(
-          color: Theme.of(sheetContext).scaffoldBackgroundColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Padding(
-              padding: EdgeInsets.only(bottom: 16),
-              child: Text(
-                '加入资料库',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            _buildOption(
-              sheetContext,
-              iconWidget: Icon(Icons.movie_creation_outlined, color: AppTheme.primary, size: 20),
-              label: 'Movie Library',
-              onTap: () =>
-                  _addToCollection(parentContext, media, 'movie', 'Movie Library', 'assets/icons/ic_popcorn.png'),
-            ),
-            _buildOption(
-              sheetContext,
-              iconWidget: Icon(Icons.tv, color: AppTheme.primary, size: 20),
-              label: 'TV Show',
-              onTap: () => _addToCollection(parentContext, media, 'tv', 'TV Show', 'assets/icons/ic_popcorn.png'),
-            ),
-            _buildOption(
-              sheetContext,
-              iconWidget: Image.asset('assets/icons/ic_bilibili.png', width: 20, height: 20),
-              label: 'Anime Wall',
-              onTap: () =>
-                  _addToCollection(parentContext, media, 'anime', 'Anime Wall', 'assets/icons/ic_bilibili.png'),
-            ),
-            const SizedBox(height: 10),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOption(
-    BuildContext context, {
-    required Widget iconWidget,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return ListTile(
-      leading: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: AppTheme.primary.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: iconWidget,
-      ),
-      title: Text(
-        label,
-        style: const TextStyle(fontWeight: FontWeight.bold),
-      ),
-      trailing: const Icon(Icons.chevron_right, color: AppColors.textTertiary),
-      onTap: () {
-        Navigator.pop(context);
-        onTap();
+      onSelected: (action) {
+        _addToCollection(
+          parentContext,
+          media,
+          action.mediaType,
+          action.successLabel,
+          action.iconPath,
+        );
       },
     );
   }
@@ -287,7 +277,8 @@ class _HomeContentState extends ConsumerState<HomeContent> {
       // For TMDb, fetch full details to ensure we have staff/directors/etc.
       if (media.sourceType == 'tmdb') {
         try {
-          final fullMedia = await TmdbService().getMediaDetail(media.sourceId, media.mediaType);
+          final fullMedia = await TmdbService()
+              .getMediaDetail(media.sourceId, media.mediaType);
           if (fullMedia != null) {
             mediaToAdd = fullMedia;
           }
@@ -308,11 +299,11 @@ class _HomeContentState extends ConsumerState<HomeContent> {
           context,
           type: SnackBarType.success,
           message: '已加入$categoryLabel想看',
-          customIcon: Image.asset(
+          customIcon: SvgPicture.asset(
             iconPath,
             width: 24,
             height: 24,
-            fit: BoxFit.contain,
+            colorFilter: ColorFilter.mode(AppTheme.primary, BlendMode.srcIn),
           ),
           customColor: AppTheme.primary,
         );

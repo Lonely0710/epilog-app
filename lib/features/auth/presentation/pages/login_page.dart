@@ -5,6 +5,7 @@ import '../../data/auth_repository.dart';
 
 import '../../../../app/theme/app_theme.dart';
 import '../../../../core/services/secure_storage_service.dart';
+import '../../../../core/services/auth_bridge.dart';
 import '../../../../core/presentation/widgets/app_snack_bar.dart';
 import '../widgets/auth_text_field.dart';
 import '../widgets/social_login_row.dart';
@@ -20,7 +21,12 @@ class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _credentialsHasError = false;
+  String _lastEmailInput = '';
+  String _lastPasswordInput = '';
   final _authRepository = AuthRepository();
+
+  static const _invalidCredentialsMessage = '邮箱或密码错误，请重试';
 
   @override
   void dispose() {
@@ -41,7 +47,7 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _handleLogin() async {
     final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
+    final password = _passwordController.text;
 
     if (email.isEmpty || password.isEmpty) {
       AppSnackBar.showWarning(context, '请输入邮箱和密码');
@@ -50,6 +56,9 @@ class _LoginPageState extends State<LoginPage> {
 
     setState(() {
       _isLoading = true;
+      _credentialsHasError = false;
+      _lastEmailInput = email;
+      _lastPasswordInput = password;
     });
 
     try {
@@ -57,6 +66,17 @@ class _LoginPageState extends State<LoginPage> {
         email: email,
         password: password,
       );
+
+      if (!mounted) return;
+
+      final isConvexReady = await AuthBridge.syncProfileFromContext(context);
+      if (!mounted) return;
+
+      if (!isConvexReady) {
+        AppSnackBar.showError(context, message: '登录成功，但同步账户失败，请重试');
+        return;
+      }
+
       if (mounted) {
         if (_reflectRememberMe) {
           await SecureStorageService.saveCredentials(
@@ -75,18 +95,27 @@ class _LoginPageState extends State<LoginPage> {
         final errorMessage = e.toString().toLowerCase();
 
         // Handle "session already exists" - user is already logged in
-        if (errorMessage.contains('session_exists') || errorMessage.contains('already signed in')) {
+        if (errorMessage.contains('session_exists') ||
+            errorMessage.contains('already signed in')) {
           // Just navigate to home since they're already logged in
           context.go('/home');
           return;
         }
 
         // Handle wrong password / invalid credentials
-        if (errorMessage.contains('invalid') ||
-            errorMessage.contains('password') ||
+        if (errorMessage.contains('incorrect') ||
+            errorMessage.contains('try again') ||
+            errorMessage.contains('invalid') ||
+            errorMessage.contains('invalidpassword') ||
             errorMessage.contains('credentials')) {
-          AppSnackBar.showError(context, message: '邮箱或密码错误，请重试');
-        } else if (errorMessage.contains('network') || errorMessage.contains('connection')) {
+          setState(() {
+            _credentialsHasError = true;
+          });
+          AppSnackBar.showError(context, message: _invalidCredentialsMessage);
+        } else if (errorMessage.contains('second factor')) {
+          AppSnackBar.showError(context, message: '此账号需要二次验证，当前版本暂不支持');
+        } else if (errorMessage.contains('network') ||
+            errorMessage.contains('connection')) {
           AppSnackBar.showNetworkError(context);
         } else {
           AppSnackBar.showError(context, message: '登录失败: ${e.toString()}');
@@ -127,11 +156,20 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _checkInput() {
-    final hasInput = _emailController.text.isNotEmpty && _passwordController.text.isNotEmpty;
-    if (hasInput != _hasInput) {
+    final emailInput = _emailController.text;
+    final passwordInput = _passwordController.text;
+    final hasInput = emailInput.isNotEmpty && passwordInput.isNotEmpty;
+    final shouldClearCredentialsError = _credentialsHasError &&
+        (emailInput != _lastEmailInput || passwordInput != _lastPasswordInput);
+    if (hasInput != _hasInput || shouldClearCredentialsError) {
       if (mounted) {
         setState(() {
           _hasInput = hasInput;
+          if (shouldClearCredentialsError) {
+            _credentialsHasError = false;
+          }
+          _lastEmailInput = emailInput;
+          _lastPasswordInput = passwordInput;
         });
       }
     }
@@ -141,7 +179,8 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final dividerColor = isDark ? Colors.grey.shade700 : Colors.grey.shade200;
-    final secondaryTextColor = isDark ? Colors.grey.shade400 : Colors.grey.shade500;
+    final secondaryTextColor =
+        isDark ? Colors.grey.shade400 : Colors.grey.shade500;
     final titleColor = isDark ? Colors.white : AppTheme.textPrimary;
     final iconColor = isDark ? Colors.white : Colors.black;
 
@@ -194,6 +233,7 @@ class _LoginPageState extends State<LoginPage> {
                   hintText: "邮箱",
                   prefixIcon: Icons.email, // Filled
                   keyboardType: TextInputType.emailAddress,
+                  hasError: _credentialsHasError,
                 ),
 
                 const SizedBox(height: 16), // Reduced from 20
@@ -204,6 +244,7 @@ class _LoginPageState extends State<LoginPage> {
                   hintText: "密码",
                   prefixIcon: Icons.lock_rounded, // Filled rounded
                   isPassword: true,
+                  hasError: _credentialsHasError,
                 ),
 
                 const SizedBox(height: 16), // Reduced from 20
@@ -219,7 +260,8 @@ class _LoginPageState extends State<LoginPage> {
                         value: _reflectRememberMe,
                         activeColor: AppTheme.primary,
                         side: const BorderSide(
-                          color: AppTheme.primary, // Primary color when unchecked
+                          color:
+                              AppTheme.primary, // Primary color when unchecked
                           width: 2,
                         ),
                         shape: RoundedRectangleBorder(
@@ -320,7 +362,9 @@ class _LoginPageState extends State<LoginPage> {
                       child: Text(
                         "其他登录方式",
                         style: TextStyle(
-                          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                          color: isDark
+                              ? Colors.grey.shade400
+                              : Colors.grey.shade600,
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                         ),
@@ -338,7 +382,9 @@ class _LoginPageState extends State<LoginPage> {
                   onGooglePressed: null, // Gmail login temporarily disabled
                 ),
 
-                const SizedBox(height: 24), // Reduced from 24 (keep same but bottom padding will help)
+                const SizedBox(
+                    height:
+                        24), // Reduced from 24 (keep same but bottom padding will help)
 
                 // Sign up link
                 Row(

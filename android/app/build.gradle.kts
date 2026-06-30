@@ -43,11 +43,15 @@ android {
         variant.outputs
             .map { it as com.android.build.gradle.internal.api.BaseVariantOutputImpl }
             .forEach { output ->
-                output.outputFileName = "Epilog_v${variant.versionName}.apk"
+                output.outputFileName = "epilog_v${variant.versionName}.apk"
             }
     }
 }
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }

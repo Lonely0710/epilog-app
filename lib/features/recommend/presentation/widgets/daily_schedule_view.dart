@@ -51,7 +51,8 @@ class _DailyScheduleViewState extends State<DailyScheduleView> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return Center(
+      return Align(
+        alignment: const Alignment(0, -0.28),
         child: Lottie.asset(
           'assets/lottie/movie_loading.json',
           width: 200,
@@ -62,8 +63,7 @@ class _DailyScheduleViewState extends State<DailyScheduleView> {
 
     if (_schedule.isEmpty) {
       return EmptyStateWidget(
-        message: '暂无数据',
-        icon: Icons.calendar_today_outlined,
+        icon: Icons.calendar_today,
         onAction: _loadData,
       );
     }

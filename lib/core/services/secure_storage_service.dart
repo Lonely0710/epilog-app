@@ -24,6 +24,18 @@ class SecureStorageService {
     return value == 'true';
   }
 
+  static Future<bool> get hasSavedCredentials async {
+    final remember = await rememberMe;
+    if (!remember) return false;
+
+    final savedEmail = await email;
+    final savedPassword = await password;
+    return savedEmail != null &&
+        savedEmail.isNotEmpty &&
+        savedPassword != null &&
+        savedPassword.isNotEmpty;
+  }
+
   // Write methods
   static Future<void> setTmdbApiKey(String value) async {
     await _storage.write(key: _keyTmdbApiKey, value: value);

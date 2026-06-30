@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 import 'package:clerk_flutter/clerk_flutter.dart';
+import '../../../../core/services/auth_bridge.dart';
 import '../../../../core/services/convex_service.dart';
 import 'package:flutter_notion_avatar/flutter_notion_avatar.dart';
 import 'package:flutter_notion_avatar/flutter_notion_avatar_controller.dart';
@@ -26,6 +27,10 @@ class SetupProfilePage extends StatefulWidget {
 }
 
 class _SetupProfilePageState extends State<SetupProfilePage> {
+  static const _avatarPickSize = 512.0;
+  static const _avatarUploadSize = 256;
+  static const _avatarJpegQuality = 68;
+
   final _usernameController = TextEditingController();
   bool _isLoading = false;
 
@@ -92,7 +97,6 @@ class _SetupProfilePageState extends State<SetupProfilePage> {
   Future<void> _pickImage() async {
     if (_isPickingImage) return;
 
-    if (_isPickingImage) return;
     _isPickingImage = true;
 
     try {
@@ -100,16 +104,17 @@ class _SetupProfilePageState extends State<SetupProfilePage> {
       final pickedFile = await picker.pickImage(
         source: ImageSource.gallery,
         requestFullMetadata: false,
-        maxWidth: 1024,
-        maxHeight: 1024,
+        maxWidth: _avatarPickSize,
+        maxHeight: _avatarPickSize,
+        imageQuality: _avatarJpegQuality,
       );
 
       if (pickedFile != null) {
         final croppedFile = await ImageCropper().cropImage(
           sourcePath: pickedFile.path,
-          maxWidth: 512,
-          maxHeight: 512,
-          compressQuality: 80,
+          maxWidth: _avatarUploadSize,
+          maxHeight: _avatarUploadSize,
+          compressQuality: _avatarJpegQuality,
           compressFormat: ImageCompressFormat.jpg,
           uiSettings: [
             AndroidUiSettings(
@@ -157,14 +162,16 @@ class _SetupProfilePageState extends State<SetupProfilePage> {
 
   Future<Uint8List?> _captureAvatarPng() async {
     try {
-      RenderRepaintBoundary? boundary = _avatarKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      RenderRepaintBoundary? boundary = _avatarKey.currentContext
+          ?.findRenderObject() as RenderRepaintBoundary?;
       if (boundary == null) return null;
 
       // Delay slightly to ensure render
       await Future.delayed(const Duration(milliseconds: 20));
 
-      ui.Image image = await boundary.toImage(pixelRatio: 3.0);
-      ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      final image = await boundary.toImage(pixelRatio: 1.5);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
       return byteData?.buffer.asUint8List();
     } catch (e) {
       debugPrint("Error capturing avatar: $e");
@@ -191,7 +198,8 @@ class _SetupProfilePageState extends State<SetupProfilePage> {
       );
 
       if (response.statusCode != 200) {
-        throw Exception('Upload failed: ${response.statusCode} ${response.body}');
+        throw Exception(
+            'Upload failed: ${response.statusCode} ${response.body}');
       }
 
       // 3. Response contains storageId
@@ -215,6 +223,20 @@ class _SetupProfilePageState extends State<SetupProfilePage> {
     });
 
     try {
+      final authState = ClerkAuth.of(context, listen: false);
+      await authState.updateUser(firstName: username);
+
+      final isAuthenticated = await AuthBridge.ensureFromAuthState(authState);
+      if (!isAuthenticated) {
+        if (mounted) {
+          AppSnackBar.showError(
+            context,
+            message: '无法连接到后端，请重新登录后再试',
+          );
+        }
+        return;
+      }
+
       String? avatarStorageId;
 
       // Handle Avatar Upload if changed
@@ -232,13 +254,16 @@ class _SetupProfilePageState extends State<SetupProfilePage> {
       }
 
       // Call Convex Mutation
-      await ConvexService.instance.client.mutation(
+      final result = await ConvexService.instance.client.mutation(
         name: 'users:storeUser',
         args: {
           'name': username,
           if (avatarStorageId != null) 'avatarStorageId': avatarStorageId,
         },
       );
+      if (!AuthBridge.isMutationOk(result)) {
+        throw StateError('Convex auth identity is missing');
+      }
 
       if (mounted) {
         await showDialog(
@@ -346,7 +371,8 @@ class _SetupProfilePageState extends State<SetupProfilePage> {
                               color: AppTheme.primary,
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.refresh, color: Colors.white, size: 16),
+                            child: const Icon(Icons.refresh,
+                                color: Colors.white, size: 16),
                           ),
                         ),
                       ),
@@ -370,7 +396,8 @@ class _SetupProfilePageState extends State<SetupProfilePage> {
                               ),
                             ],
                           ),
-                          child: const Icon(Icons.add_photo_alternate, color: AppTheme.primary, size: 20),
+                          child: const Icon(Icons.add_photo_alternate,
+                              color: AppTheme.primary, size: 20),
                         ),
                       ),
                     ),
@@ -391,7 +418,9 @@ class _SetupProfilePageState extends State<SetupProfilePage> {
               Text(
                 "不管是真名还是代号，告诉我们该如何称呼你。",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: isDark ? Colors.grey.shade400 : AppTheme.textSecondary),
+                style: TextStyle(
+                    color:
+                        isDark ? Colors.grey.shade400 : AppTheme.textSecondary),
               ),
               const SizedBox(height: 48),
 

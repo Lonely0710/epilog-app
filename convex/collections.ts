@@ -5,7 +5,7 @@ import { v } from "convex/values";
 async function getCurrentUser(ctx: any) {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-        throw new Error("Called collectMedia without authentication present");
+        throw new Error("Authentication required");
     }
     return identity.tokenIdentifier;
 }
@@ -78,6 +78,15 @@ export const collectMedia = mutation({
     handler: async (ctx, args) => {
         const userId = await getCurrentUser(ctx);
         const now = Date.now();
+        const titleZh = args.titleZh.trim() || args.titleOriginal?.trim();
+        if (!titleZh) {
+            throw new Error("Cannot collect media without a title");
+        }
+        const sourceType = args.sourceType.trim();
+        const sourceId = args.sourceId.trim();
+        if (!sourceType || !sourceId) {
+            throw new Error("Cannot collect media without a source");
+        }
 
         // Parse JSON string arrays from Flutter FFI
         const actors = parseJsonArray(args.actorsJson);
@@ -123,7 +132,7 @@ export const collectMedia = mutation({
         const existingSource = await ctx.db
             .query("media_sources")
             .withIndex("by_source", (q) =>
-                q.eq("sourceType", args.sourceType).eq("sourceId", args.sourceId)
+                q.eq("sourceType", sourceType).eq("sourceId", sourceId)
             )
             .first();
 
@@ -141,7 +150,7 @@ export const collectMedia = mutation({
             let candidateMedia = await ctx.db
                 .query("media")
                 .withIndex("by_type_title_zh", (q) =>
-                    q.eq("mediaType", args.mediaType).eq("titleZh", args.titleZh)
+                    q.eq("mediaType", args.mediaType).eq("titleZh", titleZh)
                 )
                 .first();
 
@@ -174,8 +183,8 @@ export const collectMedia = mutation({
                 // Insert new Source Mapping
                 await ctx.db.insert("media_sources", {
                     mediaId,
-                    sourceType: args.sourceType,
-                    sourceId: args.sourceId,
+                    sourceType,
+                    sourceId,
                     sourceUrl: args.sourceUrl,
                 });
 
@@ -193,7 +202,7 @@ export const collectMedia = mutation({
                 // -----------------------------------------------------
                 mediaId = await ctx.db.insert("media", {
                     mediaType: args.mediaType,
-                    titleZh: args.titleZh,
+                    titleZh,
                     titleOriginal: args.titleOriginal,
                     releaseDate: args.releaseDate,
                     duration: args.duration,
@@ -215,8 +224,8 @@ export const collectMedia = mutation({
 
                 await ctx.db.insert("media_sources", {
                     mediaId,
-                    sourceType: args.sourceType,
-                    sourceId: args.sourceId,
+                    sourceType,
+                    sourceId,
                     sourceUrl: args.sourceUrl,
                 });
             }
@@ -237,7 +246,10 @@ export const collectMedia = mutation({
                 status: args.status,
                 updatedAt: now,
             });
-            return existingCollection._id;
+            return {
+                collectionId: existingCollection._id,
+                status: args.status,
+            };
         } else {
             const id = await ctx.db.insert("collections", {
                 userId,
@@ -246,7 +258,10 @@ export const collectMedia = mutation({
                 createdAt: now,
                 updatedAt: now,
             });
-            return id;
+            return {
+                collectionId: id,
+                status: args.status,
+            };
         }
     },
 });
@@ -349,6 +364,7 @@ export const getUserCollections = query({
             collections.map(async (c) => {
                 const media = await ctx.db.get(c.mediaId);
                 if (!media) return null;
+                if (!media.titleZh && !media.titleOriginal) return null;
 
                 // Prioritize finding a source link using the efficient index
                 // For anime: prefer bgm source; For movie/tv: prefer tmdb source

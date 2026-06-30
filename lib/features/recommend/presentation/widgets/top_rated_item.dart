@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/theme/app_theme.dart';
 import '../../../../core/domain/entities/media.dart';
@@ -17,6 +18,10 @@ class TopRatedItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final titleColor =
+        isDark ? Colors.white.withValues(alpha: 0.88) : AppTheme.textPrimary;
+
     return GestureDetector(
       onTap: () {
         final url = media.sourceUrl.isNotEmpty
@@ -46,7 +51,8 @@ class TopRatedItem extends StatelessWidget {
                     fit: BoxFit.cover,
                     placeholder: (context, url) => Container(
                       color: Colors.grey[200],
-                      child: const Center(child: Icon(Icons.movie, color: Colors.grey)),
+                      child: const Center(
+                          child: Icon(Icons.movie, color: Colors.grey)),
                     ),
                     errorWidget: (context, url, error) => Image.asset(
                       'assets/icons/ic_np_poster.png',
@@ -66,23 +72,45 @@ class TopRatedItem extends StatelessWidget {
                   top: 4,
                   right: 4,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: switch (rank) {
-                        1 => const Color(0xFFFFC107),
-                        2 => const Color(0xFFBDBDBD),
-                        3 => const Color(0xFFCD7F32),
-                        _ => AppTheme.primary,
-                      },
-                      borderRadius: BorderRadius.circular(4),
+                      color: rank <= 3
+                          ? switch (rank) {
+                              1 => const Color(0xFFFFC107),
+                              2 => const Color(0xFFBDBDBD),
+                              _ => const Color(0xFFCD7F32),
+                            }
+                          : null,
+                      gradient: rank > 3
+                          ? const LinearGradient(
+                              colors: [
+                                Color(0xFF8EA7FF),
+                                Color(0xFF6D6AF4),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            )
+                          : null,
+                      borderRadius: BorderRadius.circular(999),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.star, size: 10, color: Colors.white),
+                        SvgPicture.asset(
+                          'assets/icons/star-fill.svg',
+                          width: 10,
+                          height: 10,
+                          colorFilter: const ColorFilter.mode(
+                            Colors.white,
+                            BlendMode.srcIn,
+                          ),
+                        ),
                         const SizedBox(width: 2),
                         Text(
-                          media.ratingImdb > 0 ? media.ratingImdb.toStringAsFixed(1) : 'N/A',
+                          media.ratingImdb > 0
+                              ? media.ratingImdb.toStringAsFixed(1)
+                              : 'N/A',
                           style: TextStyle(
                               color: Colors.white,
                               fontSize: 10,
@@ -100,14 +128,20 @@ class TopRatedItem extends StatelessWidget {
                     bottom: 4,
                     right: 4,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 2),
                       decoration: BoxDecoration(
                         color: const Color(0xFF616161).withValues(alpha: 0.8),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
                         media.releaseDate,
-                        style: TextStyle(color: Colors.white, fontSize: 12, fontFamily: AppTheme.primaryFont),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: AppTheme.primaryFont,
+                        ),
                       ),
                     ),
                   ),
@@ -117,10 +151,10 @@ class TopRatedItem extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             media.titleZh.isNotEmpty ? media.titleZh : media.titleOriginal,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
+              color: titleColor,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,

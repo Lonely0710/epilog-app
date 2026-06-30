@@ -77,7 +77,7 @@ class AuthPage extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Text(
-                      "or",
+                      "或",
                       style: TextStyle(
                         color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                         fontSize: 16,

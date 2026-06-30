@@ -31,7 +31,7 @@ class _TopRatedViewState extends State<TopRatedView> {
 
   // Filter State
   String _currentType = '电视剧'; // '电影' or '电视剧'
-  int? _selectedYear = 2025;
+  int? _selectedYear = DateTime.now().year;
   String? _selectedGenre;
 
   @override
@@ -65,13 +65,15 @@ class _TopRatedViewState extends State<TopRatedView> {
 
       if (_currentType == '电影') {
         if (_selectedYear != null || _selectedGenre != null) {
-          newItems = await _repository.discoverMovies(_currentPage, year: _selectedYear, genre: _selectedGenre);
+          newItems = await _repository.discoverMovies(_currentPage,
+              year: _selectedYear, genre: _selectedGenre);
         } else {
           newItems = await _repository.getTopRatedMovies(_currentPage);
         }
       } else {
         if (_selectedYear != null || _selectedGenre != null) {
-          newItems = await _repository.discoverTVShows(_currentPage, year: _selectedYear, genre: _selectedGenre);
+          newItems = await _repository.discoverTVShows(_currentPage,
+              year: _selectedYear, genre: _selectedGenre);
         } else {
           newItems = await _repository.getTopRatedTVShows(_currentPage);
         }
@@ -181,8 +183,10 @@ class _TopRatedViewState extends State<TopRatedView> {
             isLoading: _isLoading && _currentPage > 1, // Loading more
             hasMore: _hasMore,
             onLoadMore: _loadData,
+            onRefreshEmpty: _loadData,
             emptyWidget: _isLoading && _currentPage == 1
-                ? Center(
+                ? Align(
+                    alignment: const Alignment(0, -0.28),
                     child: Lottie.asset(
                       'assets/lottie/movie_loading.json',
                       width: 200,

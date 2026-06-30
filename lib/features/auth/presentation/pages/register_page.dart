@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:clerk_auth/clerk_auth.dart' as clerk;
+import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lottie/lottie.dart';
 import '../../data/auth_repository.dart';
@@ -22,7 +24,13 @@ class _RegisterPageState extends State<RegisterPage> {
   final _confirmPasswordController = TextEditingController();
 
   bool _isLoading = false;
+  bool _passwordHasError = false;
+  String _lastPasswordInput = '';
+  String _lastConfirmPasswordInput = '';
   final _authRepository = AuthRepository();
+
+  static const _compromisedPasswordMessage = '该密码曾出现在网络泄露中。为了账号安全，请换一个不同的新密码。';
+  static const _shortPasswordMessage = '密码至少需要 8 位，请重新输入。';
 
   @override
   void dispose() {
@@ -53,20 +61,42 @@ class _RegisterPageState extends State<RegisterPage> {
     }
 
     if (password != confirmPassword) {
+      setState(() {
+        _passwordHasError = true;
+      });
       AppSnackBar.showWarning(context, '两次输入的密码不一致');
       return;
     }
 
     setState(() {
       _isLoading = true;
+      _passwordHasError = false;
+      _lastPasswordInput = password;
+      _lastConfirmPasswordInput = confirmPassword;
     });
 
     try {
+      clerk.AuthError? clerkError;
+      final errorSub = ClerkAuth.errorStreamOf(context).listen((error) {
+        clerkError ??= error;
+      });
+
       // 1. Initiate Sign Up (Sends OTP if using Clerk)
-      await _authRepository.signUpWithEmail(
-        email: email,
-        password: password,
-      );
+      try {
+        await _authRepository.signUpWithEmail(
+          email: email,
+          password: password,
+        );
+        if (clerkError == null) {
+          await Future<void>.delayed(const Duration(milliseconds: 150));
+        }
+      } finally {
+        await errorSub.cancel();
+      }
+
+      if (clerkError != null) {
+        throw clerkError!;
+      }
 
       if (mounted) {
         // Save credentials if "Remember Me" is checked
@@ -88,11 +118,32 @@ class _RegisterPageState extends State<RegisterPage> {
       if (mounted) {
         final errorMessage = e.toString().toLowerCase();
 
-        if (errorMessage.contains('already') || errorMessage.contains('exists')) {
+        if (errorMessage.contains('already') ||
+            errorMessage.contains('exists')) {
           AppSnackBar.showWarning(context, '该邮箱已注册，请直接登录');
-        } else if (errorMessage.contains('password') && errorMessage.contains('weak')) {
+        } else if (errorMessage.contains('data breach') ||
+            errorMessage.contains('pwned') ||
+            errorMessage.contains('online data breach') ||
+            errorMessage.contains('form_password_pwned')) {
+          setState(() {
+            _passwordHasError = true;
+          });
+          AppSnackBar.showWarning(context, _compromisedPasswordMessage);
+        } else if (errorMessage.contains('8 characters') ||
+            errorMessage.contains('8 character') ||
+            errorMessage.contains('passwords must be 8')) {
+          setState(() {
+            _passwordHasError = true;
+          });
+          AppSnackBar.showWarning(context, _shortPasswordMessage);
+        } else if (errorMessage.contains('password') &&
+            errorMessage.contains('weak')) {
+          setState(() {
+            _passwordHasError = true;
+          });
           AppSnackBar.showWarning(context, '密码强度不足，请使用更强的密码');
-        } else if (errorMessage.contains('network') || errorMessage.contains('connection')) {
+        } else if (errorMessage.contains('network') ||
+            errorMessage.contains('connection')) {
           AppSnackBar.showNetworkError(context);
         } else {
           AppSnackBar.showError(context, message: '注册失败: ${e.toString()}');
@@ -119,13 +170,23 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   void _checkInput() {
+    final passwordInput = _passwordController.text;
+    final confirmPasswordInput = _confirmPasswordController.text;
     final hasInput = _emailController.text.isNotEmpty &&
-        _passwordController.text.isNotEmpty &&
-        _confirmPasswordController.text.isNotEmpty;
-    if (hasInput != _hasInput) {
+        passwordInput.isNotEmpty &&
+        confirmPasswordInput.isNotEmpty;
+    final shouldClearPasswordError = _passwordHasError &&
+        (passwordInput != _lastPasswordInput ||
+            confirmPasswordInput != _lastConfirmPasswordInput);
+    if (hasInput != _hasInput || shouldClearPasswordError) {
       if (mounted) {
         setState(() {
           _hasInput = hasInput;
+          if (shouldClearPasswordError) {
+            _passwordHasError = false;
+          }
+          _lastPasswordInput = passwordInput;
+          _lastConfirmPasswordInput = confirmPasswordInput;
         });
       }
     }
@@ -135,7 +196,8 @@ class _RegisterPageState extends State<RegisterPage> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final dividerColor = isDark ? Colors.grey.shade700 : Colors.grey.shade200;
-    final secondaryTextColor = isDark ? Colors.grey.shade400 : Colors.grey.shade500;
+    final secondaryTextColor =
+        isDark ? Colors.grey.shade400 : Colors.grey.shade500;
     final titleColor = isDark ? Colors.white : AppTheme.textPrimary;
     final iconColor = isDark ? Colors.white : Colors.black;
 
@@ -196,6 +258,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   hintText: "密码",
                   prefixIcon: Icons.lock_rounded, // Filled rounded
                   isPassword: true,
+                  hasError: _passwordHasError,
                 ),
 
                 const SizedBox(height: 16),
@@ -206,6 +269,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   hintText: "确认密码",
                   prefixIcon: Icons.lock_rounded,
                   isPassword: true,
+                  hasError: _passwordHasError,
                 ),
 
                 const SizedBox(height: 20),
@@ -304,9 +368,11 @@ class _RegisterPageState extends State<RegisterPage> {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Text(
-                        "or continue with",
+                        "其他登录方式",
                         style: TextStyle(
-                          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                          color: isDark
+                              ? Colors.grey.shade400
+                              : Colors.grey.shade600,
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                         ),

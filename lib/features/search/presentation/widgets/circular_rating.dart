@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../../../app/theme/app_colors.dart';
-import '../../../../app/theme/app_theme.dart';
 
 class CircularRating extends StatelessWidget {
   final double rating; // 0.0 to 10.0
@@ -31,9 +30,13 @@ class CircularRating extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final percentage = rating * 10;
+    final percentage = (rating * 10).clamp(0, 100).toDouble();
     final color = _getRatingColor(percentage);
     final trackColor = _getTrackColor(percentage);
+    final textTheme = Theme.of(context).textTheme;
+    final ringSize = size - 6;
+    final effectiveStrokeWidth =
+        strokeWidth.clamp(2.0, ringSize * 0.1).toDouble();
 
     return Container(
       width: size,
@@ -42,47 +45,70 @@ class CircularRating extends StatelessWidget {
         color: AppColors.ratingCircleBg,
         shape: BoxShape.circle,
       ),
-      padding: const EdgeInsets.all(2),
       child: Stack(
         alignment: Alignment.center,
         children: [
           SizedBox(
-            width: size,
-            height: size,
+            width: ringSize,
+            height: ringSize,
             child: CircularProgressIndicator(
               value: 1.0,
-              strokeWidth: strokeWidth,
+              strokeWidth: effectiveStrokeWidth,
               color: trackColor,
             ),
           ),
           SizedBox(
-            width: size,
-            height: size,
+            width: ringSize,
+            height: ringSize,
             child: CircularProgressIndicator(
               value: percentage / 100,
-              strokeWidth: strokeWidth,
+              strokeWidth: effectiveStrokeWidth,
               color: color,
               strokeCap: StrokeCap.round,
             ),
           ),
-          RichText(
-            text: TextSpan(
+          Transform.translate(
+            offset: Offset(size * 0.03, -size * 0.01),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              textBaseline: TextBaseline.alphabetic,
               children: [
-                TextSpan(
-                  text: '${percentage.toInt()}',
-                  style: TextStyle(
-                    fontSize: size * 0.35,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textOnDark,
-                    fontFamily: AppTheme.primaryFont,
-                  ),
+                Text(
+                  '${percentage.round()}',
+                  style: textTheme.labelMedium?.copyWith(
+                        fontSize: size * 0.38,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.textOnDark,
+                        height: 1,
+                        letterSpacing: 0,
+                      ) ??
+                      TextStyle(
+                        fontSize: size * 0.38,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.textOnDark,
+                        height: 1,
+                        letterSpacing: 0,
+                      ),
                 ),
-                TextSpan(
-                  text: '%',
-                  style: TextStyle(
-                    fontSize: size * 0.2,
-                    color: AppColors.textOnDark.withValues(alpha: 0.7),
-                    fontFamily: AppTheme.primaryFont,
+                Padding(
+                  padding: EdgeInsets.only(top: size * 0.02, left: size * 0.01),
+                  child: Text(
+                    '%',
+                    style: textTheme.labelSmall?.copyWith(
+                          fontSize: size * 0.18,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textOnDark.withValues(alpha: 0.82),
+                          height: 1,
+                          letterSpacing: 0,
+                        ) ??
+                        TextStyle(
+                          fontSize: size * 0.18,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textOnDark.withValues(alpha: 0.82),
+                          height: 1,
+                          letterSpacing: 0,
+                        ),
                   ),
                 ),
               ],
